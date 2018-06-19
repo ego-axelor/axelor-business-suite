@@ -14,6 +14,7 @@
 ## Improvements
 - Add Partner balance as a new Accounting report.
 - Remove all question marks (?) from boolean fields names.
+- Refactor the purchase order view.
 
 ## Bug Fixes
 - Check duplicate : Apply manual filter before duplicate check and allow to open form view.
