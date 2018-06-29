@@ -154,4 +154,6 @@ public interface ManufOrderService {
    * @param stockMove
    */
   void updateStockMoveFromManufOrder(List<StockMoveLine> stockMoveLineList, StockMove stockMove);
+
+  void optaPlan(ManufOrder manufOrder);
 }
