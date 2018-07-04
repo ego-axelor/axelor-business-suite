@@ -718,10 +718,10 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	List<Integer> keyList = new ArrayList<Integer>(keySet);
 
     	Allocation sourceAllocation = new Allocation();
-    	sourceAllocation.setDelay(0);
+    	//sourceAllocation.setDelay(0);
     	sourceAllocation.setPredecessorsDoneDate(0);
     	sourceAllocation.setId((long) ((i+1)*100));
-    	sourceAllocation.setPredecessorAllocationList(new ArrayList<Allocation>());
+    	//sourceAllocation.setPredecessorAllocationList(new ArrayList<Allocation>());
     	sourceAllocation.setSuccessorAllocationList(priorityToAllocationMap.get(keyList.get(0)));
     	sourceAllocation.setPredecessorsDoneDate(0);
     	curAllocationList.add(sourceAllocation);
@@ -737,9 +737,9 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	sourceAllocation.setJob(sourceJob);
     	
     	Allocation sinkAllocation = new Allocation();
-    	sinkAllocation.setDelay(0);
+    	//sinkAllocation.setDelay(0);
     	sinkAllocation.setPredecessorsDoneDate(0);
-    	sinkAllocation.setId((long) ((i+1)*100 + keyList.size() + 1));
+    	sinkAllocation.setId((long) ((i+1)*100 + operationOrders.size() + 1));
     	sinkAllocation.setPredecessorAllocationList(priorityToAllocationMap.get(keyList.get(keyList.size()-1)));
     	sinkAllocation.setSuccessorAllocationList(new ArrayList<Allocation>());
     	sinkAllocation.setPredecessorsDoneDate(0);
@@ -763,7 +763,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     			
     			ExecutionMode curExecutionMode = new ExecutionMode();
     			long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
-    			curExecutionMode.setDuration((int) duration);
+    			curExecutionMode.setDuration((int) duration/60);
     			curExecutionMode.setJob(curJob);
     			curExecutionMode.setId(curId);
     	    	curId++;
@@ -850,7 +850,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	
     	curProject.setLocalResourceList(new ArrayList<LocalResource>());
     	curProject.setReleaseDate(0);
-    	curProject.setCriticalPathDuration(criticalPathDuration);
+    	//curProject.setCriticalPathDuration(criticalPathDuration);
     	curProject.setJobList(curJobList);
 		
     	curProject.setId(curId);
@@ -886,19 +886,23 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     */
 
     // Solve the problem
-    Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling);
+    Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling2);
 
-    for(Project proj : unsolvedJobScheduling.getProjectList()) {
-    	System.out.println("project " + proj + " release date : "+ proj.getReleaseDate());
-    }
-    for(Project proj : solvedJobScheduling.getProjectList()) {
-    	System.out.println("project " + proj + " release date : "+ proj.getReleaseDate());
-    }
     for(Allocation allo : solvedJobScheduling.getAllocationList()) {
     	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + StringUtils.rightPad(" Delay : " + allo.getDelay(), 15) + " StartDate : " + allo.getStartDate());
     	//System.out.println("PredecessorsDoneDate : " + allo.getPredecessorsDoneDate());
     	//for(Allocation allo2 : allo.getPredecessorAllocationList())
     	//	System.out.println(allo2.getId());
+    }
+    
+    for(Allocation allo : solvedJobScheduling.getAllocationList()) {
+    	String spaces = "";
+    	for(int i=0;i<allo.getStartDate();i++)
+    		spaces += " ";
+    	String dashes = "";
+    	for(int i=allo.getStartDate();i<allo.getEndDate();i++)
+    		dashes += "#";
+    	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + spaces + dashes);
     }
 
     // Display the result
