@@ -633,20 +633,8 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     System.out.println("Will OptaPLAN !");
     
     // Build the Solver
-    SolverFactory<Schedule> solverFactory =
-        SolverFactory.createFromXmlResource(
-            "projectjobscheduling/solver/projectJobSchedulingSolverConfig.xml");
+    SolverFactory<Schedule> solverFactory = SolverFactory.createFromXmlResource("projectjobscheduling/solver/projectJobSchedulingSolverConfig.xml");
     Solver<Schedule> solver = solverFactory.buildSolver();
-
-    // Load a problem
-    /*
-    File outputDir =
-        new File(
-            CommonApp.determineDataDir(ProjectJobSchedulingHelloWorld.DATA_DIR_NAME),
-            "unsolved/A-1.xml");
-    XStreamSolutionFileIO<Schedule> solutionFileIO = new XStreamSolutionFileIO<>(Schedule.class);
-    Schedule unsolvedJobScheduling = solutionFileIO.read(outputDir);
-    */
 
     // Custom Unsolved Job Scheduling 
     Schedule unsolvedJobScheduling = new Schedule();
@@ -692,15 +680,6 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     }
     
     //unsolvedJobScheduling.setId(1L);
-    
-	/*
-    System.out.println("Allocation list : " + unsolvedJobScheduling.getAllocationList().size());
-    System.out.println("Job list : " + unsolvedJobScheduling.getJobList().size());
-    System.out.println("Project list : " + unsolvedJobScheduling.getProjectList().size());
-    System.out.println("Resource list : " + unsolvedJobScheduling.getResourceList().size());
-    System.out.println("Resource Requirement list : " + unsolvedJobScheduling.getResourceRequirementList().size());
-    System.out.println("Execution Mode list : " + unsolvedJobScheduling.getExecutionModeList().size());
-    */
 
     // Solve the problem
     Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling);
