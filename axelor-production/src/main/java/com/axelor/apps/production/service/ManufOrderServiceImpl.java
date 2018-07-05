@@ -630,8 +630,6 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public void optaPlan(ManufOrder manufOrder) {
-	Long curId = 0L;
-
     System.out.println("Will OptaPLAN !");
     
     // Build the Solver
@@ -661,24 +659,8 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 
     List<OperationOrder> operationOrders = manufOrder.getOperationOrderList();
     BigDecimal qty = manufOrder.getQty();
-
-    // Critical Path Duration
-    int criticalPathDuration = 0;
-    Map<Integer, Long> priorityToDurationMap = new HashMap<>();
-    for(OperationOrder curOperationOrder : operationOrders) {
-        int priority = curOperationOrder.getPriority();
-        long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
-        if(!priorityToDurationMap.containsKey(priority) || priorityToDurationMap.get(priority) < duration) {
-            priorityToDurationMap.put(priority, duration);
-        }
-    }
-    for(Integer key : priorityToDurationMap.keySet()) {
-        criticalPathDuration += priorityToDurationMap.get(key);
-    }
-    System.out.println("The critical path duration is : " + criticalPathDuration);
     
-    
-    Map<Integer, ArrayList<OperationOrder>> priorityToOperationOrderMap = new HashMap<>();
+    Map<Integer, List<OperationOrder>> priorityToOperationOrderMap = new HashMap<>();
     for(OperationOrder curOperationOrder : operationOrders) {
         int priority = curOperationOrder.getPriority();
         if(!priorityToOperationOrderMap.containsKey(priority)) {
@@ -696,8 +678,8 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     for(String machineCode : requiredMachines) {
     	Resource curResource = new GlobalResource();
     	curResource.setCapacity(1);
-    	curResource.setId(curId);
-    	curId++;
+    	long resourceId = unsolvedJobScheduling.getResourceList().size() > 0 ? unsolvedJobScheduling.getResourceList().get(unsolvedJobScheduling.getResourceList().size() - 1).getId() + 1 : 0;
+      	curResource.setId(resourceId);
     	machineCodeToResourceMap.put(machineCode, curResource);
     	unsolvedJobScheduling.getResourceList().add(curResource);
     }
@@ -706,140 +688,10 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     
     // Create projects
     for(int i=0;i<qty.intValue();i++) {
-    	Project curProject = new Project();
-    	List<Job> curJobList = new ArrayList<Job>();
-    	Map<Integer, ArrayList<Job>> priorityToJobMap = new HashMap<>();
-    	Map<Integer, ArrayList<Allocation>> priorityToAllocationMap = new HashMap<>();
-    	for(Integer priority : priorityToOperationOrderMap.keySet()) {
-        	priorityToAllocationMap.put(priority, new ArrayList<Allocation>());
-    	}
-    	List<Allocation> curAllocationList = new ArrayList<>();
-
-    	SortedSet<Integer> keySet = new TreeSet<Integer>(priorityToOperationOrderMap.keySet());
-    	List<Integer> keyList = new ArrayList<Integer>(keySet);
-
-    	Allocation sourceAllocation = new Allocation();
-    	//sourceAllocation.setDelay(0);
-    	sourceAllocation.setPredecessorsDoneDate(0);
-    	sourceAllocation.setId((long) ((i+1)*100));
-    	//sourceAllocation.setPredecessorAllocationList(new ArrayList<Allocation>());
-    	sourceAllocation.setSuccessorAllocationList(priorityToAllocationMap.get(keyList.get(0)));
-    	sourceAllocation.setPredecessorsDoneDate(0);
-    	curAllocationList.add(sourceAllocation);
-    	unsolvedJobScheduling.getAllocationList().add(sourceAllocation);
-    	List<Allocation> sourceAllocationList = new ArrayList<>();
-    	sourceAllocationList.add(sourceAllocation);
-    	Job sourceJob = new Job();
-    	sourceJob.setProject(curProject);
-    	sourceJob.setId(curId);
-    	curId++;
-    	sourceJob.setJobType(JobType.SOURCE);
-    	sourceJob.setSuccessorJobList(priorityToJobMap.get(keyList.get(0)));
-    	sourceAllocation.setJob(sourceJob);
-    	
-    	Allocation sinkAllocation = new Allocation();
-    	//sinkAllocation.setDelay(0);
-    	sinkAllocation.setPredecessorsDoneDate(0);
-    	sinkAllocation.setId((long) ((i+1)*100 + operationOrders.size() + 1));
-    	sinkAllocation.setPredecessorAllocationList(priorityToAllocationMap.get(keyList.get(keyList.size()-1)));
-    	sinkAllocation.setSuccessorAllocationList(new ArrayList<Allocation>());
-    	sinkAllocation.setPredecessorsDoneDate(0);
-    	curAllocationList.add(sinkAllocation);
-    	//allocationList.add(sinkAllocation);
-    	List<Allocation> sinkAllocationList = new ArrayList<>();
-    	sinkAllocationList.add(sinkAllocation);
-    	Job sinkJob = new Job();
-    	sinkJob.setProject(curProject);
-    	sinkJob.setId(curId);
-    	curId++;
-    	sinkJob.setJobType(JobType.SINK);
-    	//sinkJob.setSuccessorJobList(priorityToJobMap.get(keyList.get(keyList.size()-1)));
-    	sinkAllocation.setJob(sinkJob);
-    	
-    	int c=0;
-    	for(int j=0;j<keyList.size();j++) {
-    		int priority = keyList.get(j);
-    		for(OperationOrder curOperationOrder : priorityToOperationOrderMap.get(priority)) {
-    			Job curJob = new Job();
-    			
-    			ExecutionMode curExecutionMode = new ExecutionMode();
-    			long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
-    			curExecutionMode.setDuration((int) duration/60);
-    			curExecutionMode.setJob(curJob);
-    			curExecutionMode.setId(curId);
-    	    	curId++;
-    			List<ExecutionMode> curExecutionModeList = new ArrayList<ExecutionMode>();
-    			curExecutionModeList.add(curExecutionMode);
-    			unsolvedJobScheduling.getExecutionModeList().add(curExecutionMode);
-    			curJob.setExecutionModeList(curExecutionModeList);
-    			
-    			List<ResourceRequirement> curResourceRequirementList = new ArrayList<>();
-    			ResourceRequirement curResourceRequirement = new ResourceRequirement();
-    			curResourceRequirement.setExecutionMode(curExecutionMode);
-    			Resource curResource = machineCodeToResourceMap.get(curOperationOrder.getMachineWorkCenter().getCode());
-    			curResourceRequirement.setResource(curResource);
-    			curResourceRequirement.setId(curId);
-    	    	curId++;
-    			curResourceRequirement.setRequirement(1);
-    			curResourceRequirementList.add(curResourceRequirement);
-    			curExecutionMode.setResourceRequirementList(curResourceRequirementList);
-    			unsolvedJobScheduling.getResourceRequirementList().add(curResourceRequirement);
-    			
-
-    			curJob.setJobType(JobType.STANDARD);
-    			curJob.setProject(curProject);
-    			if(j != keyList.size() - 1) {
-    				curJob.setSuccessorJobList(priorityToJobMap.get(j + 1));
-    			}
-    			
-    			Allocation curAllocation = new Allocation();
-    			curAllocation.setJob(curJob);
-    			List<Allocation> predecessorAllocationList = j > 0 ? priorityToAllocationMap.get(keyList.get(j - 1)) : sourceAllocationList;
-    			curAllocation.setPredecessorAllocationList(predecessorAllocationList);
-    			List<Allocation> successorAllocationList = j < keyList.size() - 1 ? priorityToAllocationMap.get(keyList.get(j + 1)) : sinkAllocationList;
-    			curAllocation.setSuccessorAllocationList(successorAllocationList);
-    			Long id = (long) ((i+1)*100+(c+1));
-    			curAllocation.setId(id);
-    			c++;
-    			idToMachineCodeMap.put(id, curOperationOrder.getMachineWorkCenter().getName());
-    			//if(j == 0 || j == keyList.size() - 1)
-    			//	curAllocation.setDelay(0);
-    	    	curAllocation.setPredecessorsDoneDate(0);
-    			curAllocation.setSourceAllocation(sourceAllocation);
-    			curAllocation.setSinkAllocation(sinkAllocation);
-    	    	curAllocationList.add(curAllocation);
-    	    	unsolvedJobScheduling.getAllocationList().add(curAllocation);
-    			curAllocation.setPredecessorsDoneDate(0);
-    			priorityToAllocationMap.get(priority).add(curAllocation);
-    			
-    			curJob.setId(curId);
-    	    	curId++;
-    			
-    			if(!priorityToJobMap.containsKey(priority)) {
-    				priorityToJobMap.put(priority, new ArrayList<Job>());
-    			}
-    			priorityToJobMap.get(priority).add(curJob);
-    			
-    			curJobList.add(curJob);
-    			unsolvedJobScheduling.getJobList().add(curJob);
-    		}
-    	}
-    	
-    	curProject.setLocalResourceList(new ArrayList<LocalResource>());
-    	curProject.setReleaseDate(0);
-    	//curProject.setCriticalPathDuration(criticalPathDuration);
-    	curProject.setJobList(curJobList);
-		
-    	curProject.setId(curId);
-    	curId++;
-
-    	unsolvedJobScheduling.getProjectList().add(curProject);
-		
-    	unsolvedJobScheduling.getAllocationList().add(sinkAllocation);
+    	createProject(unsolvedJobScheduling, priorityToOperationOrderMap, operationOrders, machineCodeToResourceMap, idToMachineCodeMap);
     }
     
-    unsolvedJobScheduling.setId(curId);
-	curId++;
+    //unsolvedJobScheduling.setId(1L);
     
 	/*
     System.out.println("Allocation list : " + unsolvedJobScheduling.getAllocationList().size());
@@ -866,5 +718,209 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     		dashes += "#";
     	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + spaces + dashes);
     }
+    System.out.println("Critical path duration : " + solvedJobScheduling.getProjectList().get(0).getCriticalPathDuration());
+  }
+  
+  private int getCriticalPathDuration(List<OperationOrder> operationOrders) {
+    int criticalPathDuration = 0;
+    Map<Integer, Long> priorityToDurationMap = new HashMap<>();
+    for(OperationOrder curOperationOrder : operationOrders) {
+        int priority = curOperationOrder.getPriority();
+        long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
+        if(!priorityToDurationMap.containsKey(priority) || priorityToDurationMap.get(priority) < duration) {
+            priorityToDurationMap.put(priority, duration);
+        }
+    }
+    for(Integer key : priorityToDurationMap.keySet()) {
+        criticalPathDuration += priorityToDurationMap.get(key);
+    }
+    System.out.println("The critical path duration is : " + criticalPathDuration);
+    return criticalPathDuration / 60;
+  }
+  
+  private int getCriticalPathDuration(Project project) {
+	  Job sourceJob = null;
+	  for(Job curJob : project.getJobList()) {
+		  if(curJob.getJobType() == JobType.SOURCE) {
+			  sourceJob = curJob;
+			  break;
+		  }
+	  }
+	  if(sourceJob != null) {
+		  return getCriticalPathDuration(sourceJob);
+	  }
+	  return 0;
+  }
+  
+  private int getCriticalPathDuration(Job job) {
+	  if(job.getJobType() == JobType.SINK) {
+		  return 0;
+	  }
+	  else {
+		  int maximumCriticalPathDuration = 0;
+		  for(Job successorJob : job.getSuccessorJobList()) {
+			  int curCriticalPathDuration = getCriticalPathDuration(successorJob);
+			  if(curCriticalPathDuration > maximumCriticalPathDuration) {
+				  maximumCriticalPathDuration = curCriticalPathDuration;
+			  }
+		  }
+		  return maximumCriticalPathDuration + maximumExecutionModeDuration(job);
+	  }
+  }
+  
+  private int maximumExecutionModeDuration(Job job) {
+	  int maximumExecutionModeDuration = 0;
+	  if(job.getExecutionModeList() != null) {
+		  for(ExecutionMode executionMode : job.getExecutionModeList()) {
+			  if(maximumExecutionModeDuration < executionMode.getDuration()) {
+				  maximumExecutionModeDuration = executionMode.getDuration();
+			  }
+		  }
+		  return maximumExecutionModeDuration;
+	  }
+	  return 0;
+  }
+  
+  private void createProject(Schedule unsolvedJobScheduling, Map<Integer, List<OperationOrder>> priorityToOperationOrderMap, List<OperationOrder> operationOrders, Map<String, Resource> machineCodeToResourceMap, Map<Long, String> idToMachineCodeMap) {
+	long projectId = unsolvedJobScheduling.getProjectList().size() > 0 ? unsolvedJobScheduling.getProjectList().get(unsolvedJobScheduling.getProjectList().size() - 1).getId() + 1 : 1;
+
+  	SortedSet<Integer> keySet = new TreeSet<Integer>(priorityToOperationOrderMap.keySet());
+  	List<Integer> keyList = new ArrayList<Integer>(keySet);
+
+  	Project curProject = new Project();
+  	List<Job> curJobList = new ArrayList<Job>();
+  	Map<Integer, ArrayList<Job>> priorityToJobMap = new HashMap<>();
+  	for(Integer priority : keyList) {
+  		priorityToJobMap.put(priority, new ArrayList<Job>());
+  	}
+  	Map<Integer, ArrayList<Allocation>> priorityToAllocationMap = new HashMap<>();
+  	for(Integer priority : keyList) {
+      	priorityToAllocationMap.put(priority, new ArrayList<Allocation>());
+  	}
+  	List<Allocation> curAllocationList = new ArrayList<>();
+
+  	Allocation sourceAllocation = new Allocation();
+  	//sourceAllocation.setDelay(0);
+  	sourceAllocation.setPredecessorsDoneDate(0);
+  	sourceAllocation.setId((long) (projectId*100));
+  	//sourceAllocation.setPredecessorAllocationList(new ArrayList<Allocation>());
+  	sourceAllocation.setSuccessorAllocationList(priorityToAllocationMap.get(keyList.get(0)));
+  	sourceAllocation.setPredecessorsDoneDate(0);
+  	curAllocationList.add(sourceAllocation);
+  	unsolvedJobScheduling.getAllocationList().add(sourceAllocation);
+  	List<Allocation> sourceAllocationList = new ArrayList<>();
+  	sourceAllocationList.add(sourceAllocation);
+  	Job sourceJob = new Job();
+  	sourceJob.setProject(curProject);
+  	long sourceJobId = unsolvedJobScheduling.getJobList().size() > 0 ? unsolvedJobScheduling.getJobList().get(unsolvedJobScheduling.getJobList().size() - 1).getId() + 1 : 0;
+  	sourceJob.setId(sourceJobId);
+  	sourceJob.setJobType(JobType.SOURCE);
+  	sourceJob.setSuccessorJobList(priorityToJobMap.get(keyList.get(0)));
+  	sourceAllocation.setJob(sourceJob);
+  	curJobList.add(sourceJob);
+  	unsolvedJobScheduling.getJobList().add(sourceJob);
+  	
+  	Allocation sinkAllocation = new Allocation();
+  	//sinkAllocation.setDelay(0);
+  	sinkAllocation.setPredecessorsDoneDate(0);
+  	sinkAllocation.setId((long) (projectId*100 + operationOrders.size() + 1));
+  	sinkAllocation.setPredecessorAllocationList(priorityToAllocationMap.get(keyList.get(keyList.size()-1)));
+  	sinkAllocation.setSuccessorAllocationList(new ArrayList<Allocation>());
+  	sinkAllocation.setPredecessorsDoneDate(0);
+  	curAllocationList.add(sinkAllocation);
+  	//allocationList.add(sinkAllocation);
+  	List<Allocation> sinkAllocationList = new ArrayList<>();
+  	sinkAllocationList.add(sinkAllocation);
+  	Job sinkJob = new Job();
+  	sinkJob.setProject(curProject);
+  	long sinkJobId = unsolvedJobScheduling.getJobList().size() > 0 ? unsolvedJobScheduling.getJobList().get(unsolvedJobScheduling.getJobList().size() - 1).getId() + 1 : 0;
+  	sinkJob.setId(sinkJobId);
+  	sinkJob.setJobType(JobType.SINK);
+  	//sinkJob.setSuccessorJobList(priorityToJobMap.get(keyList.get(keyList.size()-1)));
+  	sinkAllocation.setJob(sinkJob);
+  	curJobList.add(sinkJob);
+  	unsolvedJobScheduling.getJobList().add(sinkJob);
+  	List<Job> sinkJobList = new ArrayList<>();
+  	sinkJobList.add(sinkJob);
+  	
+  	int c=0;
+  	for(int j=0;j<keyList.size();j++) {
+  		int priority = keyList.get(j);
+  		for(OperationOrder curOperationOrder : priorityToOperationOrderMap.get(priority)) {
+  			Job curJob = new Job();
+  			
+  			ExecutionMode curExecutionMode = new ExecutionMode();
+  			long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
+  			curExecutionMode.setDuration((int) duration/60);
+  			curExecutionMode.setJob(curJob);
+  			long executionModeId = unsolvedJobScheduling.getExecutionModeList().size() > 0 ? unsolvedJobScheduling.getExecutionModeList().get(unsolvedJobScheduling.getExecutionModeList().size() - 1).getId() + 1 : 0;
+  			curExecutionMode.setId(executionModeId);
+  			List<ExecutionMode> curExecutionModeList = new ArrayList<ExecutionMode>();
+  			curExecutionModeList.add(curExecutionMode);
+  			unsolvedJobScheduling.getExecutionModeList().add(curExecutionMode);
+  			curJob.setExecutionModeList(curExecutionModeList);
+  			
+  			List<ResourceRequirement> curResourceRequirementList = new ArrayList<>();
+  			ResourceRequirement curResourceRequirement = new ResourceRequirement();
+  			curResourceRequirement.setExecutionMode(curExecutionMode);
+  			Resource curResource = machineCodeToResourceMap.get(curOperationOrder.getMachineWorkCenter().getCode());
+  			curResourceRequirement.setResource(curResource);
+  			long resourceRequirementId = unsolvedJobScheduling.getResourceRequirementList().size() > 0 ? unsolvedJobScheduling.getResourceRequirementList().get(unsolvedJobScheduling.getResourceRequirementList().size() - 1).getId() + 1 : 0;
+  			curResourceRequirement.setId(resourceRequirementId);
+  			curResourceRequirement.setRequirement(1);
+  			curResourceRequirementList.add(curResourceRequirement);
+  			curExecutionMode.setResourceRequirementList(curResourceRequirementList);
+  			unsolvedJobScheduling.getResourceRequirementList().add(curResourceRequirement);
+  			
+
+  			curJob.setJobType(JobType.STANDARD);
+  			curJob.setProject(curProject);
+  			if(j < keyList.size() - 1) {
+  				curJob.setSuccessorJobList(priorityToJobMap.get(keyList.get(j + 1)));
+  			}
+  			else {
+  				curJob.setSuccessorJobList(sinkJobList);
+  			}
+  			Allocation curAllocation = new Allocation();
+  			curAllocation.setJob(curJob);
+  			List<Allocation> predecessorAllocationList = j > 0 ? priorityToAllocationMap.get(keyList.get(j - 1)) : sourceAllocationList;
+  			curAllocation.setPredecessorAllocationList(predecessorAllocationList);
+  			List<Allocation> successorAllocationList = j < keyList.size() - 1 ? priorityToAllocationMap.get(keyList.get(j + 1)) : sinkAllocationList;
+  			curAllocation.setSuccessorAllocationList(successorAllocationList);
+  			Long id = (long) (projectId*100+(c+1));
+  			curAllocation.setId(id);
+  			c++;
+  			idToMachineCodeMap.put(id, curOperationOrder.getMachineWorkCenter().getName());
+  			//if(j == 0 || j == keyList.size() - 1)
+  			//	curAllocation.setDelay(0);
+  	    	curAllocation.setPredecessorsDoneDate(0);
+  			curAllocation.setSourceAllocation(sourceAllocation);
+  			curAllocation.setSinkAllocation(sinkAllocation);
+  	    	curAllocationList.add(curAllocation);
+  	    	unsolvedJobScheduling.getAllocationList().add(curAllocation);
+  			curAllocation.setPredecessorsDoneDate(0);
+  			priorityToAllocationMap.get(priority).add(curAllocation);
+  			
+  			long jobId = unsolvedJobScheduling.getJobList().size() > 0 ? unsolvedJobScheduling.getJobList().get(unsolvedJobScheduling.getJobList().size() - 1).getId() + 1 : 0;
+  			curJob.setId(jobId);
+  			
+  			priorityToJobMap.get(priority).add(curJob);
+  			
+  			curJobList.add(curJob);
+  			unsolvedJobScheduling.getJobList().add(curJob);
+  		}
+  	}
+  	
+  	curProject.setLocalResourceList(new ArrayList<LocalResource>());
+  	curProject.setReleaseDate(0);
+  	//curProject.setCriticalPathDuration(getCriticalPathDuration(operationOrders));
+  	curProject.setJobList(curJobList);
+  	curProject.setCriticalPathDuration(getCriticalPathDuration(curProject));
+		
+  	curProject.setId(projectId);
+
+  	unsolvedJobScheduling.getProjectList().add(curProject);
+		
+  	unsolvedJobScheduling.getAllocationList().add(sinkAllocation);
   }
 }
