@@ -675,9 +675,12 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     Map<Long, String> idToMachineCodeMap = new HashMap<>();
     
     // Create projects
+    /*
     for(int i=0;i<qty.intValue();i++) {
-    	createProject(unsolvedJobScheduling, priorityToOperationOrderMap, operationOrders, machineCodeToResourceMap, idToMachineCodeMap);
+    	createProject(unsolvedJobScheduling, qty.intValue(), priorityToOperationOrderMap, operationOrders, machineCodeToResourceMap, idToMachineCodeMap);
     }
+    */
+	createProject(unsolvedJobScheduling, qty.intValue(), priorityToOperationOrderMap, operationOrders, machineCodeToResourceMap, idToMachineCodeMap);
     
     //unsolvedJobScheduling.setId(1L);
 
@@ -760,7 +763,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 	  return 0;
   }
   
-  private void createProject(Schedule unsolvedJobScheduling, Map<Integer, List<OperationOrder>> priorityToOperationOrderMap, List<OperationOrder> operationOrders, Map<String, Resource> machineCodeToResourceMap, Map<Long, String> idToMachineCodeMap) {
+  private void createProject(Schedule unsolvedJobScheduling, int qty, Map<Integer, List<OperationOrder>> priorityToOperationOrderMap, List<OperationOrder> operationOrders, Map<String, Resource> machineCodeToResourceMap, Map<Long, String> idToMachineCodeMap) {
 	long projectId = unsolvedJobScheduling.getProjectList().size() > 0 ? unsolvedJobScheduling.getProjectList().get(unsolvedJobScheduling.getProjectList().size() - 1).getId() + 1 : 1;
 
   	SortedSet<Integer> keySet = new TreeSet<Integer>(priorityToOperationOrderMap.keySet());
@@ -829,8 +832,15 @@ public class ManufOrderServiceImpl implements ManufOrderService {
   			Job curJob = new Job();
   			
   			ExecutionMode curExecutionMode = new ExecutionMode();
-  			long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
-  			curExecutionMode.setDuration((int) duration/60);
+  			//long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
+  			long duration = 0;
+  			if(curOperationOrder.getMachineWorkCenter().getWorkCenterTypeSelect() != 1) {
+  				duration = (long) (curOperationOrder.getMachineWorkCenter().getDurationPerCycle() * Math.ceil((float) qty / curOperationOrder.getMachineWorkCenter().getMaxCapacityPerCycle().intValue()));
+  			}
+  			else if(curOperationOrder.getMachineWorkCenter().getWorkCenterTypeSelect() == 1) {
+  				duration = curOperationOrder.getMachineWorkCenter().getProdHumanResourceList().get(0).getDuration() * qty;
+  			}
+  			curExecutionMode.setDuration((int) duration / 60);
   			curExecutionMode.setJob(curJob);
   			long executionModeId = unsolvedJobScheduling.getExecutionModeList().size() > 0 ? unsolvedJobScheduling.getExecutionModeList().get(unsolvedJobScheduling.getExecutionModeList().size() - 1).getId() + 1 : 0;
   			curExecutionMode.setId(executionModeId);
