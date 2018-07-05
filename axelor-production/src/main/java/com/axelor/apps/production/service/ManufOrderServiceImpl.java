@@ -641,21 +641,23 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     Solver<Schedule> solver = solverFactory.buildSolver();
 
     // Load a problem
+    /*
     File outputDir =
         new File(
             CommonApp.determineDataDir(ProjectJobSchedulingHelloWorld.DATA_DIR_NAME),
             "unsolved/A-1.xml");
     XStreamSolutionFileIO<Schedule> solutionFileIO = new XStreamSolutionFileIO<>(Schedule.class);
     Schedule unsolvedJobScheduling = solutionFileIO.read(outputDir);
+    */
 
     // Custom Unsolved Job Scheduling 
-    Schedule unsolvedJobScheduling2 = new Schedule();
-    List<Job> jobList = new ArrayList<>();
-    List<Project> projectList = new ArrayList<>();
-    List<Resource> resourceList = new ArrayList<>();
-    List<ResourceRequirement> resourceRequirementList = new ArrayList<>();
-    List<ExecutionMode> executionModeList = new ArrayList<>();
-    List<Allocation> allocationList = new ArrayList<>();
+    Schedule unsolvedJobScheduling = new Schedule();
+    unsolvedJobScheduling.setJobList(new ArrayList<Job>());
+    unsolvedJobScheduling.setProjectList(new ArrayList<Project>());
+    unsolvedJobScheduling.setResourceList(new ArrayList<Resource>());
+    unsolvedJobScheduling.setResourceRequirementList(new ArrayList<ResourceRequirement>());
+    unsolvedJobScheduling.setExecutionModeList(new ArrayList<ExecutionMode>());
+    unsolvedJobScheduling.setAllocationList(new ArrayList<Allocation>());
 
     List<OperationOrder> operationOrders = manufOrder.getOperationOrderList();
     BigDecimal qty = manufOrder.getQty();
@@ -666,7 +668,6 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     for(OperationOrder curOperationOrder : operationOrders) {
         int priority = curOperationOrder.getPriority();
         long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
-        //System.out.println("curOperationOrder " + curOperationOrder.getName() + " / Priority : " + priority + " / Duration : " + duration);
         if(!priorityToDurationMap.containsKey(priority) || priorityToDurationMap.get(priority) < duration) {
             priorityToDurationMap.put(priority, duration);
         }
@@ -698,7 +699,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	curResource.setId(curId);
     	curId++;
     	machineCodeToResourceMap.put(machineCode, curResource);
-    	resourceList.add(curResource);
+    	unsolvedJobScheduling.getResourceList().add(curResource);
     }
     
     Map<Long, String> idToMachineCodeMap = new HashMap<>();
@@ -725,7 +726,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	sourceAllocation.setSuccessorAllocationList(priorityToAllocationMap.get(keyList.get(0)));
     	sourceAllocation.setPredecessorsDoneDate(0);
     	curAllocationList.add(sourceAllocation);
-    	allocationList.add(sourceAllocation);
+    	unsolvedJobScheduling.getAllocationList().add(sourceAllocation);
     	List<Allocation> sourceAllocationList = new ArrayList<>();
     	sourceAllocationList.add(sourceAllocation);
     	Job sourceJob = new Job();
@@ -769,7 +770,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	    	curId++;
     			List<ExecutionMode> curExecutionModeList = new ArrayList<ExecutionMode>();
     			curExecutionModeList.add(curExecutionMode);
-    			executionModeList.add(curExecutionMode);
+    			unsolvedJobScheduling.getExecutionModeList().add(curExecutionMode);
     			curJob.setExecutionModeList(curExecutionModeList);
     			
     			List<ResourceRequirement> curResourceRequirementList = new ArrayList<>();
@@ -782,18 +783,10 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     			curResourceRequirement.setRequirement(1);
     			curResourceRequirementList.add(curResourceRequirement);
     			curExecutionMode.setResourceRequirementList(curResourceRequirementList);
-    			resourceRequirementList.add(curResourceRequirement);
+    			unsolvedJobScheduling.getResourceRequirementList().add(curResourceRequirement);
     			
-    			/*
-    			if(j == 0)
-	    			curJob.setJobType(JobType.SOURCE);
-    			else if(j == keyList.size() - 1)
-	    			curJob.setJobType(JobType.SINK);
-    			else
-	    			curJob.setJobType(JobType.STANDARD);
-	    		*/
-    			curJob.setJobType(JobType.STANDARD);
 
+    			curJob.setJobType(JobType.STANDARD);
     			curJob.setProject(curProject);
     			if(j != keyList.size() - 1) {
     				curJob.setSuccessorJobList(priorityToJobMap.get(j + 1));
@@ -811,19 +804,12 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     			idToMachineCodeMap.put(id, curOperationOrder.getMachineWorkCenter().getName());
     			//if(j == 0 || j == keyList.size() - 1)
     			//	curAllocation.setDelay(0);
-    			/*
-    			curAllocation.setId(curId);
-    	    	curId++;
-    	    	*/
     	    	curAllocation.setPredecessorsDoneDate(0);
     			curAllocation.setSourceAllocation(sourceAllocation);
     			curAllocation.setSinkAllocation(sinkAllocation);
     	    	curAllocationList.add(curAllocation);
-    	    	allocationList.add(curAllocation);
+    	    	unsolvedJobScheduling.getAllocationList().add(curAllocation);
     			curAllocation.setPredecessorsDoneDate(0);
-    			/*if(!priorityToAllocationMap.containsKey(priority)) {
-    				priorityToAllocationMap.put(priority, new ArrayList<Allocation>());
-    			}*/
     			priorityToAllocationMap.get(priority).add(curAllocation);
     			
     			curJob.setId(curId);
@@ -835,18 +821,9 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     			priorityToJobMap.get(priority).add(curJob);
     			
     			curJobList.add(curJob);
-    			jobList.add(curJob);
+    			unsolvedJobScheduling.getJobList().add(curJob);
     		}
     	}
-
-    	/*
-    	Allocation sourceAllocation = priorityToAllocationMap.get(keyList.get(0)).get(0);
-    	Allocation sinkAllocation = priorityToAllocationMap.get(keyList.get(keyList.size() - 1)).get(0);
-    	for(Allocation curAllocation : curAllocationList) {
-			curAllocation.setSourceAllocation(sourceAllocation);
-			curAllocation.setSinkAllocation(sinkAllocation);
-    	}
-    	*/
     	
     	curProject.setLocalResourceList(new ArrayList<LocalResource>());
     	curProject.setReleaseDate(0);
@@ -856,43 +833,28 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	curProject.setId(curId);
     	curId++;
 
-		projectList.add(curProject);
+    	unsolvedJobScheduling.getProjectList().add(curProject);
 		
-    	allocationList.add(sinkAllocation);
+    	unsolvedJobScheduling.getAllocationList().add(sinkAllocation);
     }
     
-    unsolvedJobScheduling2.setJobList(jobList);
-    unsolvedJobScheduling2.setAllocationList(allocationList);
-    unsolvedJobScheduling2.setProjectList(projectList);
-    unsolvedJobScheduling2.setResourceList(resourceList);
-    unsolvedJobScheduling2.setResourceRequirementList(resourceRequirementList);
-    unsolvedJobScheduling2.setExecutionModeList(executionModeList);
-    unsolvedJobScheduling2.setId(curId);
+    unsolvedJobScheduling.setId(curId);
 	curId++;
     
-    System.out.println("Allocation list : " + unsolvedJobScheduling2.getAllocationList().size());
-    System.out.println("Job list : " + unsolvedJobScheduling2.getJobList().size());
-    System.out.println("Project list : " + unsolvedJobScheduling2.getProjectList().size());
-    System.out.println("Resource list : " + unsolvedJobScheduling2.getResourceList().size());
-    System.out.println("Resource Requirement list : " + unsolvedJobScheduling2.getResourceRequirementList().size());
-    System.out.println("Execution Mode list : " + unsolvedJobScheduling2.getExecutionModeList().size());
-    
-    /*
-    for(Allocation allo : unsolvedJobScheduling2.getAllocationList()) {
-    	System.out.println("Allocation " + allo);
-    	for(Allocation allo2 : allo.getPredecessorAllocationList())
-    		System.out.println(allo2);
-    }
+	/*
+    System.out.println("Allocation list : " + unsolvedJobScheduling.getAllocationList().size());
+    System.out.println("Job list : " + unsolvedJobScheduling.getJobList().size());
+    System.out.println("Project list : " + unsolvedJobScheduling.getProjectList().size());
+    System.out.println("Resource list : " + unsolvedJobScheduling.getResourceList().size());
+    System.out.println("Resource Requirement list : " + unsolvedJobScheduling.getResourceRequirementList().size());
+    System.out.println("Execution Mode list : " + unsolvedJobScheduling.getExecutionModeList().size());
     */
 
     // Solve the problem
-    Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling2);
+    Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling);
 
     for(Allocation allo : solvedJobScheduling.getAllocationList()) {
     	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + StringUtils.rightPad(" Delay : " + allo.getDelay(), 15) + " StartDate : " + allo.getStartDate());
-    	//System.out.println("PredecessorsDoneDate : " + allo.getPredecessorsDoneDate());
-    	//for(Allocation allo2 : allo.getPredecessorAllocationList())
-    	//	System.out.println(allo2.getId());
     }
     
     for(Allocation allo : solvedJobScheduling.getAllocationList()) {
@@ -904,21 +866,5 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     		dashes += "#";
     	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + spaces + dashes);
     }
-
-    // Display the result
-    //System.out.println("\nSolved Job scheduling:\n" + solvedJobScheduling + "\n");
-    
-    XStream xstream = new XStream();
-    String xml = xstream.toXML(unsolvedJobScheduling2);
-    try {
-		File file = new File("test1.txt");
-		FileWriter fileWriter = new FileWriter(file);
-		fileWriter.write(xml);
-		fileWriter.flush();
-		fileWriter.close();
-	} catch (IOException e) {
-		e.printStackTrace();
-	}
-    
   }
 }
