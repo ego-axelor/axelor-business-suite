@@ -35,6 +35,7 @@ import com.axelor.apps.production.db.ProdProduct;
 import com.axelor.apps.production.db.ProdResidualProduct;
 import com.axelor.apps.production.db.WorkCenter;
 import com.axelor.apps.production.db.repo.ManufOrderRepository;
+import com.axelor.apps.production.db.repo.OperationOrderRepository;
 import com.axelor.apps.production.db.repo.WorkCenterRepository;
 import com.axelor.apps.production.exceptions.IExceptionMessage;
 import com.axelor.apps.production.service.app.AppProductionService;
@@ -46,6 +47,7 @@ import com.axelor.apps.stock.db.StockMoveLine;
 import com.axelor.apps.stock.db.repo.StockMoveRepository;
 import com.axelor.apps.stock.service.StockMoveLineService;
 import com.axelor.apps.stock.service.StockMoveService;
+import com.axelor.apps.tool.date.DurationTool;
 import com.axelor.exception.AxelorException;
 import com.axelor.exception.db.repo.TraceBackRepository;
 import com.axelor.i18n.I18n;
@@ -60,6 +62,7 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -75,6 +78,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.optaplanner.core.api.domain.solution.drools.ProblemFactCollectionProperty;
 import org.optaplanner.core.api.solver.Solver;
 import org.optaplanner.core.api.solver.SolverFactory;
 import org.optaplanner.examples.common.app.CommonApp;
@@ -631,7 +635,14 @@ public class ManufOrderServiceImpl implements ManufOrderService {
   }
 
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
-  public void optaPlan(List<ManufOrder> manufOrderList) {
+  public void optaPlan(ManufOrder manufOrder) throws AxelorException {
+	  List<ManufOrder> manufOrderList = new ArrayList<>();
+	  manufOrderList.add(manufOrder);
+	  optaPlan(manufOrderList);
+  }
+
+  @Transactional(rollbackOn = {AxelorException.class, Exception.class})
+  public void optaPlan(List<ManufOrder> manufOrderList) throws AxelorException {
     System.out.println("Will OptaPLAN !");
 
     // Build the Solver
@@ -672,51 +683,47 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 	
     // Solve the problem
     Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling);
-    
-    /*
-    for(Project project : solvedJobScheduling.getProjectList()) {
-    	ManufOrder manufOrder = projectIdToManufOrderMap.get(project.getId());
-    	
-    	List<OperationOrder> operationOrderList = new ArrayList<>();
-    	
-    	for(Allocation allocation : solvedJobScheduling.getAllocationList()) {
-    		if(allocation.getProject() == project) {
-    			OperationOrder operationOrder = new OperationOrder();
 
-    			
-    		}
-    	}
-    	
-    	manufOrder.setOperationOrderList(operationOrderList);
-    }
-    */
-    
     for(ManufOrder manufOrder : manufOrderList) {
     	manufOrder.getOperationOrderList().clear();
+        manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
+        manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
     }
     for(Allocation allocation : solvedJobScheduling.getAllocationList()) {
 		OperationOrder operationOrder = new OperationOrder();
 		ProdProcessLine prodProcessLine = allocationIdToProdProcessLineMap.get(allocation.getId());
 		
 		if(prodProcessLine != null) {
+			ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
+			
 			operationOrder.setOperationName(prodProcessLine.getName());
 			LocalDateTime now = Beans.get(AppProductionService.class).getTodayDateTime().toLocalDateTime();
-			operationOrder.setPlannedStartDateT(now.plusMinutes(allocation.getStartDate()));
-			operationOrder.setPlannedEndDateT(now.plusMinutes(allocation.getEndDate()));
+			
+			LocalDateTime operationOrderPlannedStartDate = now.plusMinutes(allocation.getStartDate());
+			operationOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
+			if(manufOrder.getPlannedStartDateT() == null || manufOrder.getPlannedStartDateT().isAfter(operationOrderPlannedStartDate)) {
+				manufOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
+			}
+			
+			LocalDateTime operationOrderPlannedEndDate = now.plusMinutes(allocation.getEndDate());
+			operationOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
+			if(manufOrder.getPlannedEndDateT() == null || manufOrder.getPlannedEndDateT().isBefore(operationOrderPlannedEndDate)) {
+				manufOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
+			}
+
+			operationOrder.setPlannedDuration(
+				DurationTool.getSecondsDuration(
+					Duration.between(
+						operationOrder.getPlannedStartDateT(), operationOrder.getPlannedEndDateT())));
+			
 			operationOrder.setPriority(prodProcessLine.getPriority());
-			
-			ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
-			manufOrder.getOperationOrderList().add(operationOrder);
-			
 			operationOrder.setManufOrder(manufOrder);
+			operationOrder.setWorkCenter(prodProcessLine.getWorkCenter());
+			operationOrder.setStatusSelect(OperationOrderRepository.STATUS_PLANNED);
+			
+			manufOrder.addOperationOrderListItem(operationOrder);
 		}
 	}
-    
-    /*
-    for(Allocation allo : solvedJobScheduling.getAllocationList()) {
-    	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + StringUtils.rightPad(" Delay : " + allo.getDelay(), 15) + " StartDate : " + allo.getStartDate());
-    }
-    */
 
     for(Allocation allo : solvedJobScheduling.getAllocationList()) {
     	String spaces = "";
@@ -727,8 +734,6 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     		dashes += "#";
     	System.out.println(StringUtils.rightPad(allo + " Machine : " + (allocationIdToProdProcessLineMap.get(allo.getId()) != null ? allocationIdToProdProcessLineMap.get(allo.getId()).getWorkCenter().getName() : "NONE"), 50) + spaces + dashes);
     }
-    //System.out.println("Critical path duration : " + solvedJobScheduling.getProjectList().get(0).getCriticalPathDuration());
-    //System.out.println("Nb resources : " + solvedJobScheduling.getResourceList().size());
   }
   
   private int getCriticalPathDuration(Project project) {

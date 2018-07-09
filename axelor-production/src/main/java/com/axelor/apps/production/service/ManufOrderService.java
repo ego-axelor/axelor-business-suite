@@ -155,5 +155,7 @@ public interface ManufOrderService {
    */
   void updateStockMoveFromManufOrder(List<StockMoveLine> stockMoveLineList, StockMove stockMove);
 
-  void optaPlan(List<ManufOrder> manufOrderList);
+  void optaPlan(ManufOrder manufOrder) throws AxelorException;
+
+  void optaPlan(List<ManufOrder> manufOrderList) throws AxelorException;
 }

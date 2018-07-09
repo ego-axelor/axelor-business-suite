@@ -64,8 +64,8 @@ public class ManufOrderWorkflowService {
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public ManufOrder plan(ManufOrder manufOrder) throws AxelorException {
     ManufOrderService manufOrderService = Beans.get(ManufOrderService.class);
+    
     /*
-
     if (CollectionUtils.isEmpty(manufOrder.getOperationOrderList())) {
       manufOrderService.preFillOperations(manufOrder);
     }
@@ -98,6 +98,7 @@ public class ManufOrderWorkflowService {
     manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
     manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
     */
+    ////////////////
 
     List<ManufOrder> manufOrderList = new ArrayList<>();
     manufOrderList.add(manufOrder);
