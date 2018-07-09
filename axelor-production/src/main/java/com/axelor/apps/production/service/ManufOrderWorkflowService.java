@@ -64,6 +64,7 @@ public class ManufOrderWorkflowService {
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public ManufOrder plan(ManufOrder manufOrder) throws AxelorException {
     ManufOrderService manufOrderService = Beans.get(ManufOrderService.class);
+    /*
 
     if (CollectionUtils.isEmpty(manufOrder.getOperationOrderList())) {
       manufOrderService.preFillOperations(manufOrder);
@@ -85,10 +86,6 @@ public class ManufOrderWorkflowService {
       for (OperationOrder operationOrder : getSortedOperationOrderList(manufOrder)) {
         operationOrderWorkflowService.plan(operationOrder);
       }
-
-      List<ManufOrder> manufOrderList = new ArrayList<>();
-      manufOrderList.add(manufOrder);
-      manufOrderService.optaPlan(manufOrderList);
     }
 
     manufOrder.setPlannedEndDateT(this.computePlannedEndDateT(manufOrder));
@@ -100,6 +97,11 @@ public class ManufOrderWorkflowService {
     manufOrderStockMoveService.createToProduceStockMove(manufOrder);
     manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
     manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
+    */
+
+    List<ManufOrder> manufOrderList = new ArrayList<>();
+    manufOrderList.add(manufOrder);
+    manufOrderService.optaPlan(manufOrderList);
 
     return manufOrderRepo.save(manufOrder);
   }

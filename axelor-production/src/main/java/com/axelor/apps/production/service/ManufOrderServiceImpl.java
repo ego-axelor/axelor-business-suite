@@ -662,36 +662,61 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 		unsolvedJobScheduling.getResourceList().add(curResource);
 	}
 
-    Map<Long, String> idToMachineCodeMap = new HashMap<>();
-
+    Map<Long, ManufOrder> projectIdToManufOrderMap = new HashMap<>();
+    Map<Long, ProdProcessLine> allocationIdToProdProcessLineMap = new HashMap<>();
     for(ManufOrder manufOrder : manufOrderList) {
-	    /*
-	    List<OperationOrder> operationOrders = manufOrder.getOperationOrderList();
-	    Map<Integer, List<OperationOrder>> priorityToOperationOrderMap = new HashMap<>();
-	    for(OperationOrder curOperationOrder : operationOrders) {
-	        int priority = curOperationOrder.getPriority();
-	        if(!priorityToOperationOrderMap.containsKey(priority)) {
-	        	priorityToOperationOrderMap.put(priority, new ArrayList<OperationOrder>());
-	        }
-	        priorityToOperationOrderMap.get(priority).add(curOperationOrder);
-	    }
-
-	    Integer qty = manufOrder.getQty().intValue();
-	    
 	    // Create project
-		createProject(unsolvedJobScheduling, qty, priorityToOperationOrderMap, operationOrders, machineCodeToResourceMap, idToMachineCodeMap);
-	    */
-	    
-	    // Create project
-		createProject(unsolvedJobScheduling, manufOrder, machineCodeToResourceMap, idToMachineCodeMap);
+		Project project = createProject(unsolvedJobScheduling, manufOrder, machineCodeToResourceMap, allocationIdToProdProcessLineMap);
+		projectIdToManufOrderMap.put(project.getId(), manufOrder);
     }
 	
     // Solve the problem
     Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling);
+    
+    /*
+    for(Project project : solvedJobScheduling.getProjectList()) {
+    	ManufOrder manufOrder = projectIdToManufOrderMap.get(project.getId());
+    	
+    	List<OperationOrder> operationOrderList = new ArrayList<>();
+    	
+    	for(Allocation allocation : solvedJobScheduling.getAllocationList()) {
+    		if(allocation.getProject() == project) {
+    			OperationOrder operationOrder = new OperationOrder();
 
+    			
+    		}
+    	}
+    	
+    	manufOrder.setOperationOrderList(operationOrderList);
+    }
+    */
+    
+    for(ManufOrder manufOrder : manufOrderList) {
+    	manufOrder.getOperationOrderList().clear();
+    }
+    for(Allocation allocation : solvedJobScheduling.getAllocationList()) {
+		OperationOrder operationOrder = new OperationOrder();
+		ProdProcessLine prodProcessLine = allocationIdToProdProcessLineMap.get(allocation.getId());
+		
+		if(prodProcessLine != null) {
+			operationOrder.setOperationName(prodProcessLine.getName());
+			LocalDateTime now = Beans.get(AppProductionService.class).getTodayDateTime().toLocalDateTime();
+			operationOrder.setPlannedStartDateT(now.plusMinutes(allocation.getStartDate()));
+			operationOrder.setPlannedEndDateT(now.plusMinutes(allocation.getEndDate()));
+			operationOrder.setPriority(prodProcessLine.getPriority());
+			
+			ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
+			manufOrder.getOperationOrderList().add(operationOrder);
+			
+			operationOrder.setManufOrder(manufOrder);
+		}
+	}
+    
+    /*
     for(Allocation allo : solvedJobScheduling.getAllocationList()) {
     	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + StringUtils.rightPad(" Delay : " + allo.getDelay(), 15) + " StartDate : " + allo.getStartDate());
     }
+    */
 
     for(Allocation allo : solvedJobScheduling.getAllocationList()) {
     	String spaces = "";
@@ -700,30 +725,11 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     	String dashes = "";
     	for(int i=allo.getStartDate();i<allo.getEndDate();i++)
     		dashes += "#";
-    	System.out.println(StringUtils.rightPad(allo + " Machine : " + idToMachineCodeMap.get(allo.getId()), 50) + spaces + dashes);
+    	System.out.println(StringUtils.rightPad(allo + " Machine : " + (allocationIdToProdProcessLineMap.get(allo.getId()) != null ? allocationIdToProdProcessLineMap.get(allo.getId()).getWorkCenter().getName() : "NONE"), 50) + spaces + dashes);
     }
-    System.out.println("Critical path duration : " + solvedJobScheduling.getProjectList().get(0).getCriticalPathDuration());
-    System.out.println("Nb resources : " + solvedJobScheduling.getResourceList().size());
+    //System.out.println("Critical path duration : " + solvedJobScheduling.getProjectList().get(0).getCriticalPathDuration());
+    //System.out.println("Nb resources : " + solvedJobScheduling.getResourceList().size());
   }
-  
-  /*
-  private int getCriticalPathDuration(List<OperationOrder> operationOrders) {
-    int criticalPathDuration = 0;
-    Map<Integer, Long> priorityToDurationMap = new HashMap<>();
-    for(OperationOrder curOperationOrder : operationOrders) {
-        int priority = curOperationOrder.getPriority();
-        long duration = curOperationOrder.getProdHumanResourceList().get(0).getDuration();
-        if(!priorityToDurationMap.containsKey(priority) || priorityToDurationMap.get(priority) < duration) {
-            priorityToDurationMap.put(priority, duration);
-        }
-    }
-    for(Integer key : priorityToDurationMap.keySet()) {
-        criticalPathDuration += priorityToDurationMap.get(key);
-    }
-    System.out.println("The critical path duration is : " + criticalPathDuration);
-    return criticalPathDuration / 60;
-  }
-  */
   
   private int getCriticalPathDuration(Project project) {
 	  Job sourceJob = null;
@@ -768,7 +774,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 	  return 0;
   }
   
-  private void createProject(Schedule unsolvedJobScheduling, ManufOrder manufOrder, Map<String, Resource> machineCodeToResourceMap, Map<Long, String> idToMachineCodeMap) {
+  private Project createProject(Schedule unsolvedJobScheduling, ManufOrder manufOrder, Map<String, Resource> machineCodeToResourceMap, Map<Long, ProdProcessLine> allocationIdToProdProcessLineMap) {
     
 	List<ProdProcessLine> prodProcessLineList = manufOrder.getProdProcess().getProdProcessLineList();
     Map<Integer, List<ProdProcessLine>> priorityToProdProcessLineMap = new HashMap<>();
@@ -897,7 +903,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
   			Long id = (long) (projectId*100+(c+1));
   			curAllocation.setId(id);
   			c++;
-  			idToMachineCodeMap.put(id, curProdProcessLine.getWorkCenter().getName());
+  			allocationIdToProdProcessLineMap.put(id, curProdProcessLine);
   			//if(j == 0 || j == keyList.size() - 1)
   			//	curAllocation.setDelay(0);
   	    	curAllocation.setPredecessorsDoneDate(0);
@@ -929,5 +935,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
   	unsolvedJobScheduling.getProjectList().add(curProject);
 		
   	unsolvedJobScheduling.getAllocationList().add(sinkAllocation);
+  	
+  	return curProject;
   }
 }
