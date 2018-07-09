@@ -73,42 +73,42 @@ public class ManufOrderWorkflowService {
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public List<ManufOrder> plan(List<ManufOrder> manufOrderList) throws AxelorException {
     ManufOrderService manufOrderService = Beans.get(ManufOrderService.class);
-    
-    for(ManufOrder manufOrder : manufOrderList) {
-    	if (CollectionUtils.isEmpty(manufOrder.getOperationOrderList())) {
-	      manufOrderService.preFillOperations(manufOrder);
-	    }
-	    if (!manufOrder.getIsConsProOnOperation()
-	        && CollectionUtils.isEmpty(manufOrder.getToConsumeProdProductList())) {
-	      manufOrderService.createToConsumeProdProductList(manufOrder);
-	    }
-	
-	    if (CollectionUtils.isEmpty(manufOrder.getToProduceProdProductList())) {
-	      manufOrderService.createToProduceProdProductList(manufOrder);
-	    }
-	
-	    if (manufOrder.getPlannedStartDateT() == null) {
-	      manufOrder.setPlannedStartDateT(
-	          Beans.get(AppProductionService.class).getTodayDateTime().toLocalDateTime());
-	    }
+
+    for (ManufOrder manufOrder : manufOrderList) {
+      if (CollectionUtils.isEmpty(manufOrder.getOperationOrderList())) {
+        manufOrderService.preFillOperations(manufOrder);
+      }
+      if (!manufOrder.getIsConsProOnOperation()
+          && CollectionUtils.isEmpty(manufOrder.getToConsumeProdProductList())) {
+        manufOrderService.createToConsumeProdProductList(manufOrder);
+      }
+
+      if (CollectionUtils.isEmpty(manufOrder.getToProduceProdProductList())) {
+        manufOrderService.createToProduceProdProductList(manufOrder);
+      }
+
+      if (manufOrder.getPlannedStartDateT() == null) {
+        manufOrder.setPlannedStartDateT(
+            Beans.get(AppProductionService.class).getTodayDateTime().toLocalDateTime());
+      }
     }
 
     manufOrderService.optaPlan(manufOrderList);
-    
-    for(ManufOrder manufOrder : manufOrderList) {
-	    manufOrder.setPlannedEndDateT(this.computePlannedEndDateT(manufOrder));
-	
-	    if (!manufOrder.getIsConsProOnOperation()) {
-	      manufOrderStockMoveService.createToConsumeStockMove(manufOrder);
-	    }
-	
-	    manufOrderStockMoveService.createToProduceStockMove(manufOrder);
-	    manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
-	    manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
+
+    for (ManufOrder manufOrder : manufOrderList) {
+      manufOrder.setPlannedEndDateT(this.computePlannedEndDateT(manufOrder));
+
+      if (!manufOrder.getIsConsProOnOperation()) {
+        manufOrderStockMoveService.createToConsumeStockMove(manufOrder);
+      }
+
+      manufOrderStockMoveService.createToProduceStockMove(manufOrder);
+      manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
+      manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
     }
 
-    for(ManufOrder manufOrder : manufOrderList) {
-    	manufOrderRepo.save(manufOrder);
+    for (ManufOrder manufOrder : manufOrderList) {
+      manufOrderRepo.save(manufOrder);
     }
     return manufOrderList;
   }

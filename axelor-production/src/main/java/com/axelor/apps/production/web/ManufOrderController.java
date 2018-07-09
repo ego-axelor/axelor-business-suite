@@ -39,7 +39,6 @@ import com.google.inject.Singleton;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import org.eclipse.birt.core.exception.BirtException;
 import org.slf4j.Logger;
@@ -142,11 +141,16 @@ public class ManufOrderController {
 
     try {
       List<Integer> manufOrderIdList = (List<Integer>) request.getContext().get("_ids");
-      if(manufOrderIdList == null) {
-    	  Long manufOrderId = (Long) request.getContext().get("id");
-    	  manufOrderIdList = Lists.newArrayList(manufOrderId.intValue());
+      if (manufOrderIdList == null) {
+        Long manufOrderId = (Long) request.getContext().get("id");
+        manufOrderIdList = Lists.newArrayList(manufOrderId.intValue());
       }
-      List<ManufOrder> manufOrderList = manufOrderRepo.all().filter("self.id in (:idList)").bind("idList", manufOrderIdList).fetch();
+      List<ManufOrder> manufOrderList =
+          manufOrderRepo
+              .all()
+              .filter("self.id in (:idList)")
+              .bind("idList", manufOrderIdList)
+              .fetch();
 
       manufOrderWorkflowService.plan(manufOrderList);
 
