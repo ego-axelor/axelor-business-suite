@@ -150,6 +150,20 @@ public class ManufOrderController {
     }
   }
 
+  public void multiPlan(ActionRequest request, ActionResponse response) {
+
+    try {
+      List<Integer> manufOrderIdList = (List<Integer>) request.getContext().get("_ids");
+      List<ManufOrder> manufOrderList = manufOrderRepo.all().filter("self.id in (:idList)").bind("idList", manufOrderIdList).fetch();
+
+      manufOrderWorkflowService.plan(manufOrderList);
+
+      response.setReload(true);
+    } catch (Exception e) {
+      TraceBackService.trace(response, e);
+    }
+  }
+
   /**
    * Method that generate a Pdf file for an manufacturing order
    *

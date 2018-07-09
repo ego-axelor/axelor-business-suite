@@ -108,6 +108,18 @@ public class ManufOrderWorkflowService {
   }
 
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
+  public List<ManufOrder> plan(List<ManufOrder> manufOrderList) throws AxelorException {
+    ManufOrderService manufOrderService = Beans.get(ManufOrderService.class);
+ 
+    manufOrderService.optaPlan(manufOrderList);
+
+    for(ManufOrder manufOrder : manufOrderList) {
+    	manufOrderRepo.save(manufOrder);
+    }
+    return manufOrderList;
+  }
+
+  @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public void start(ManufOrder manufOrder) throws AxelorException {
 
     manufOrder.setRealStartDateT(

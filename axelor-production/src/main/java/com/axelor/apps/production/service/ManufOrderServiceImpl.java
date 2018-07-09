@@ -687,7 +687,10 @@ public class ManufOrderServiceImpl implements ManufOrderService {
     for(ManufOrder manufOrder : manufOrderList) {
     	manufOrder.getOperationOrderList().clear();
         manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
-        manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
+        if(manufOrder.getManufOrderSeq() == null)
+        	manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
+        manufOrder.setPlannedStartDateT(null);
+        manufOrder.setPlannedEndDateT(null);
     }
     for(Allocation allocation : solvedJobScheduling.getAllocationList()) {
 		OperationOrder operationOrder = new OperationOrder();
