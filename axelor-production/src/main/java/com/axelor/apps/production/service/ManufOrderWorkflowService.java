@@ -86,7 +86,9 @@ public class ManufOrderWorkflowService {
         operationOrderWorkflowService.plan(operationOrder);
       }
 
-      manufOrderService.optaPlan(manufOrder);
+      List<ManufOrder> manufOrderList = new ArrayList<>();
+      manufOrderList.add(manufOrder);
+      manufOrderService.optaPlan(manufOrderList);
     }
 
     manufOrder.setPlannedEndDateT(this.computePlannedEndDateT(manufOrder));
