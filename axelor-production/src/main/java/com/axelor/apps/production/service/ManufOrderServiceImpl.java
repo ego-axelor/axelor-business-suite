@@ -716,6 +716,7 @@ public class ManufOrderServiceImpl implements ManufOrderService {
 				operationOrder.setPriority(prodProcessLine.getPriority());
 				operationOrder.setManufOrder(manufOrder);
 				operationOrder.setWorkCenter(prodProcessLine.getWorkCenter());
+				operationOrder.setMachineWorkCenter(prodProcessLine.getWorkCenter());
 				operationOrder.setStatusSelect(OperationOrderRepository.STATUS_PLANNED);
 
 				manufOrder.addOperationOrderListItem(operationOrder);
