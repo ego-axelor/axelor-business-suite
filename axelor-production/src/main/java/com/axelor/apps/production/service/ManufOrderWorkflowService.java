@@ -95,7 +95,7 @@ public class ManufOrderWorkflowService {
       }
     }
 
-    manufOrderService.optaPlan(manufOrderList);
+    Beans.get(ManufOrderPlanService.class).optaPlan(manufOrderList);
 
     for (ManufOrder manufOrder : manufOrderList) {
       manufOrder.setPlannedEndDateT(this.computePlannedEndDateT(manufOrder));
