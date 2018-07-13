@@ -19,7 +19,6 @@ package com.axelor.apps.production.service;
 
 import com.axelor.apps.production.db.ManufOrder;
 import com.axelor.exception.AxelorException;
-
 import java.util.List;
 
 public interface ManufOrderPlanService {
