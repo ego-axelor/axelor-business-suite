@@ -4,9 +4,7 @@ import com.axelor.apps.base.db.repo.AppProductionRepository;
 import com.axelor.apps.base.service.UnitConversionService;
 import com.axelor.apps.production.db.ManufOrder;
 import com.axelor.apps.production.db.OperationOrder;
-import com.axelor.apps.production.db.ProdProcessLine;
 import com.axelor.apps.production.db.WorkCenter;
-import com.axelor.apps.production.db.repo.ManufOrderRepository;
 import com.axelor.apps.production.db.repo.OperationOrderRepository;
 import com.axelor.apps.production.db.repo.WorkCenterRepository;
 import com.axelor.apps.production.service.app.AppProductionService;
@@ -19,11 +17,14 @@ import com.google.inject.persist.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+
+import org.apache.commons.collections.CollectionUtils;
 import org.optaplanner.core.api.solver.Solver;
 import org.optaplanner.core.api.solver.SolverFactory;
 import org.optaplanner.examples.projectjobscheduling.domain.Allocation;
@@ -53,26 +54,6 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
 
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public void optaPlan(List<ManufOrder> manufOrderList) throws AxelorException {
-    // Get optaplanner granularity
-    Integer granularity;
-    switch (Beans.get(AppProductionRepository.class).all().fetchOne().getSchedulingGranularity()) {
-      case (1):
-        granularity = 60;
-        break;
-      case (2):
-        granularity = 1800;
-        break;
-      case (3):
-        granularity = 3600;
-        break;
-      case (4):
-        granularity = 86400;
-        break;
-      default:
-        granularity = 60;
-        break;
-    }
-
     // Build the Solver
     SolverFactory<Schedule> solverFactory =
         SolverFactory.createFromXmlResource(
@@ -80,37 +61,38 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
     Solver<Schedule> solver = solverFactory.buildSolver();
 
     // Custom Unsolved Job Scheduling
-    Schedule unsolvedJobScheduling = new Schedule();
-    unsolvedJobScheduling.setJobList(new ArrayList<Job>());
-    unsolvedJobScheduling.setProjectList(new ArrayList<Project>());
-    unsolvedJobScheduling.setResourceList(new ArrayList<Resource>());
-    unsolvedJobScheduling.setResourceRequirementList(new ArrayList<ResourceRequirement>());
-    unsolvedJobScheduling.setExecutionModeList(new ArrayList<ExecutionMode>());
-    unsolvedJobScheduling.setAllocationList(new ArrayList<Allocation>());
+    Schedule unsolvedJobScheduling = getInitializedSchedule();
 
     // Create Resources
-    List<WorkCenter> workCenterList = Beans.get(WorkCenterRepository.class).all().fetch();
     Map<String, Resource> machineCodeToResourceMap = new HashMap<>();
-    for (WorkCenter workCenter : workCenterList) {
-      Resource resource = new GlobalResource();
-
-      resource.setCapacity(1);
-      long resourceId =
-          unsolvedJobScheduling.getResourceList().size() > 0
-              ? unsolvedJobScheduling
-                      .getResourceList()
-                      .get(unsolvedJobScheduling.getResourceList().size() - 1)
-                      .getId()
-                  + 1
-              : 0;
-      resource.setId(resourceId);
-
-      machineCodeToResourceMap.put(workCenter.getCode(), resource);
-
-      unsolvedJobScheduling.getResourceList().add(resource);
-    }
-
+    createResources(unsolvedJobScheduling, machineCodeToResourceMap);
+    
+    // Get optaplanner granularity
+    Integer granularity;
     LocalDateTime now = Beans.get(AppProductionService.class).getTodayDateTime().toLocalDateTime();
+    switch (Beans.get(AppProductionRepository.class).all().fetchOne().getSchedulingGranularity()) {
+      case (2):
+        granularity = 1800;
+        System.out.println(now);
+        now = now.truncatedTo(ChronoUnit.HALF_DAYS);
+        System.out.println(now);
+        break;
+      case (3):
+        granularity = 3600;
+        System.out.println(now);
+        now = now.truncatedTo(ChronoUnit.HOURS);
+        System.out.println(now);
+        break;
+      case (4):
+        granularity = 86400;
+        now = now.truncatedTo(ChronoUnit.DAYS);
+        break;
+      default:
+        granularity = 60;
+        now = now.truncatedTo(ChronoUnit.MINUTES);
+        break;
+    }
+    
 
     Map<Long, ManufOrder> projectIdToManufOrderMap = new HashMap<>();
     Map<Long, OperationOrder> allocationIdToOperationOrderMap = new HashMap<>();
@@ -130,44 +112,78 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
     // Solve the problem
     Schedule solvedJobScheduling = solver.solve(unsolvedJobScheduling);
 
-    for (ManufOrder manufOrder : manufOrderList) {
-      // manufOrder.getOperationOrderList().clear();
-      manufOrder.setStatusSelect(ManufOrderRepository.STATUS_PLANNED);
-      if (manufOrder.getManufOrderSeq() == null)
-        manufOrder.setManufOrderSeq(Beans.get(ManufOrderService.class).getManufOrderSeq());
-      manufOrder.setPlannedStartDateT(null);
-      manufOrder.setPlannedEndDateT(null);
-    }
     for (Allocation allocation : solvedJobScheduling.getAllocationList()) {
       OperationOrder operationOrder = allocationIdToOperationOrderMap.get(allocation.getId());
 
       if (operationOrder != null) {
-        ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
-
-        LocalDateTime operationOrderPlannedStartDate =
-            now.plusSeconds(allocation.getStartDate() * granularity);
-        operationOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
-        if (manufOrder.getPlannedStartDateT() == null
-            || manufOrder.getPlannedStartDateT().isAfter(operationOrderPlannedStartDate)) {
-          manufOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
-        }
-
-        LocalDateTime operationOrderPlannedEndDate =
-            now.plusSeconds(allocation.getEndDate() * granularity);
-        operationOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
-        if (manufOrder.getPlannedEndDateT() == null
-            || manufOrder.getPlannedEndDateT().isBefore(operationOrderPlannedEndDate)) {
-          manufOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
-        }
-
-        operationOrder.setPlannedDuration(
-            DurationTool.getSecondsDuration(
-                Duration.between(
-                    operationOrder.getPlannedStartDateT(), operationOrder.getPlannedEndDateT())));
-
-        operationOrder.setStatusSelect(OperationOrderRepository.STATUS_PLANNED);
+        planOperationOrder(operationOrder, allocation, granularity, now, projectIdToManufOrderMap);
       }
     }
+  }
+
+  private Schedule getInitializedSchedule() {
+      Schedule unsolvedJobScheduling = new Schedule();
+
+      unsolvedJobScheduling.setJobList(new ArrayList<Job>());
+      unsolvedJobScheduling.setProjectList(new ArrayList<Project>());
+      unsolvedJobScheduling.setResourceList(new ArrayList<Resource>());
+      unsolvedJobScheduling.setResourceRequirementList(new ArrayList<ResourceRequirement>());
+      unsolvedJobScheduling.setExecutionModeList(new ArrayList<ExecutionMode>());
+      unsolvedJobScheduling.setAllocationList(new ArrayList<Allocation>());
+
+      return unsolvedJobScheduling;
+  }
+
+  private void createResources(Schedule unsolvedJobScheduling, Map<String, Resource> machineCodeToResourceMap){
+      List<Resource> resourceList = new ArrayList<Resource>();
+      
+      List<WorkCenter> workCenterList = Beans.get(WorkCenterRepository.class).all().fetch();
+      for (WorkCenter workCenter : workCenterList) {
+        Resource resource = new GlobalResource();
+    
+        resource.setCapacity(1);
+        long resourceId =
+            unsolvedJobScheduling.getResourceList().size() > 0
+                ? unsolvedJobScheduling
+                        .getResourceList()
+                        .get(unsolvedJobScheduling.getResourceList().size() - 1)
+                        .getId()
+                    + 1
+                : 0;
+        resource.setId(resourceId);
+    
+        machineCodeToResourceMap.put(workCenter.getCode(), resource);
+    
+        resourceList.add(resource);
+        
+        unsolvedJobScheduling.getResourceList().add(resource);
+      }
+  }
+
+  private void planOperationOrder(OperationOrder operationOrder, Allocation allocation, Integer granularity, LocalDateTime now, Map<Long, ManufOrder> projectIdToManufOrderMap) throws AxelorException {
+    if (CollectionUtils.isEmpty(operationOrder.getToConsumeProdProductList())) {
+      Beans.get(OperationOrderService.class).createToConsumeProdProductList(operationOrder);
+    }
+
+    LocalDateTime operationOrderPlannedStartDate =
+        now.plusSeconds(allocation.getStartDate() * granularity);
+    operationOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
+
+    LocalDateTime operationOrderPlannedEndDate =
+        now.plusSeconds(allocation.getEndDate() * granularity);
+    operationOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
+
+    operationOrder.setPlannedDuration(
+        DurationTool.getSecondsDuration(
+            Duration.between(
+                operationOrder.getPlannedStartDateT(), operationOrder.getPlannedEndDateT())));
+
+    ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
+    if (manufOrder == null || manufOrder.getIsConsProOnOperation()) {
+      Beans.get(OperationOrderStockMoveService.class).createToConsumeStockMove(operationOrder);
+    }
+
+    operationOrder.setStatusSelect(OperationOrderRepository.STATUS_PLANNED);
   }
 
   private int getCriticalPathDuration(Project project) {
@@ -212,33 +228,7 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
     return 0;
   }
 
-  private Project createProject(
-      Schedule unsolvedJobScheduling,
-      ManufOrder manufOrder,
-      Map<String, Resource> machineCodeToResourceMap,
-      Map<Long, OperationOrder> allocationIdToOperationOrderMap,
-      LocalDateTime now,
-      Integer granularity) {
-
-    List<ProdProcessLine> prodProcessLineList =
-        manufOrder.getProdProcess().getProdProcessLineList();
-    Map<Integer, List<OperationOrder>> priorityToOperationOrderMap = new HashMap<>();
-    for (OperationOrder operationOrder : manufOrder.getOperationOrderList()) {
-      int priority = operationOrder.getPriority();
-      if (!priorityToOperationOrderMap.containsKey(priority)) {
-        priorityToOperationOrderMap.put(priority, new ArrayList<OperationOrder>());
-      }
-      priorityToOperationOrderMap.get(priority).add(operationOrder);
-    }
-    List<Integer> sortedPriorityList =
-        new ArrayList<Integer>(new TreeSet<Integer>(priorityToOperationOrderMap.keySet()));
-    Map<Integer, ArrayList<Job>> priorityToJobMap = new HashMap<>();
-    Map<Integer, ArrayList<Allocation>> priorityToAllocationMap = new HashMap<>();
-    for (Integer priority : sortedPriorityList) {
-      priorityToJobMap.put(priority, new ArrayList<Job>());
-      priorityToAllocationMap.put(priority, new ArrayList<Allocation>());
-    }
-
+  private Project initializeProject(Schedule unsolvedJobScheduling) {
     Project project = new Project();
     long projectId =
         unsolvedJobScheduling.getProjectList().size() > 0
@@ -254,169 +244,266 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
     project.setReleaseDate(0);
     project.setCriticalPathDuration(getCriticalPathDuration(project));
     unsolvedJobScheduling.getProjectList().add(project);
+    
+    return project;
+  }
 
-    Job sourceJob = new Job();
-    long sourceJobId =
-        unsolvedJobScheduling.getJobList().size() > 0
-            ? unsolvedJobScheduling
-                    .getJobList()
-                    .get(unsolvedJobScheduling.getJobList().size() - 1)
-                    .getId()
-                + 1
-            : 0;
-    sourceJob.setId(sourceJobId);
-    sourceJob.setProject(project);
-    sourceJob.setJobType(JobType.SOURCE);
-    sourceJob.setSuccessorJobList(priorityToJobMap.get(sortedPriorityList.get(0)));
+  private Map<Integer, List<OperationOrder>> getPriorityToOperationOrderListMap(ManufOrder manufOrder){
+      Map<Integer, List<OperationOrder>> priorityToOperationOrderListMap = new HashMap<>();
+      for (OperationOrder operationOrder : manufOrder.getOperationOrderList()) {
+        int priority = operationOrder.getPriority();
+        if (!priorityToOperationOrderListMap.containsKey(priority)) {
+            priorityToOperationOrderListMap.put(priority, new ArrayList<OperationOrder>());
+        }
+        priorityToOperationOrderListMap.get(priority).add(operationOrder);
+      }
+      
+      return priorityToOperationOrderListMap;
+  }
+
+  private Map<Integer, ArrayList<Job>> initializePriorityToJobListMap(List<Integer> sortedPriorityList) {
+      Map<Integer, ArrayList<Job>> priorityToJobListMap = new HashMap<>();
+      
+      for (Integer priority : sortedPriorityList) {
+        priorityToJobListMap.put(priority, new ArrayList<Job>());
+      }
+      
+      return priorityToJobListMap;
+  }
+
+  private Map<Integer, ArrayList<Allocation>> initializePriorityToAllocationListMap(List<Integer> sortedPriorityList) {
+      Map<Integer, ArrayList<Allocation>> priorityToAllocationListMap = new HashMap<>();
+      
+      for (Integer priority : sortedPriorityList) {
+        priorityToAllocationListMap.put(priority, new ArrayList<Allocation>());
+      }
+      
+      return priorityToAllocationListMap;
+  }
+
+  private Job getSourceJob(Schedule unsolvedJobScheduling, Project project, Map<Integer, ArrayList<Job>> priorityToJobListMap, List<Integer> sortedPriorityList) {
+      Job sourceJob = new Job();
+      long sourceJobId =
+          unsolvedJobScheduling.getJobList().size() > 0
+              ? unsolvedJobScheduling
+                      .getJobList()
+                      .get(unsolvedJobScheduling.getJobList().size() - 1)
+                      .getId()
+                  + 1
+              : 0;
+      sourceJob.setId(sourceJobId);
+      sourceJob.setProject(project);
+      sourceJob.setJobType(JobType.SOURCE);
+      sourceJob.setSuccessorJobList(priorityToJobListMap.get(sortedPriorityList.get(0)));
+      
+      return sourceJob;
+  }
+
+  private Job getSinkJob(Schedule unsolvedJobScheduling, Project project) {
+      Job sinkJob = new Job();
+      long sinkJobId =
+          unsolvedJobScheduling.getJobList().size() > 0
+              ? unsolvedJobScheduling
+                      .getJobList()
+                      .get(unsolvedJobScheduling.getJobList().size() - 1)
+                      .getId()
+                  + 1
+              : 0;
+      sinkJob.setId(sinkJobId);
+      sinkJob.setProject(project);
+      sinkJob.setJobType(JobType.SINK);
+      
+      return sinkJob;
+  }
+
+  private Allocation getSourceAllocation(Project project, Map<Integer, ArrayList<Allocation>> priorityToAllocationListMap, List<Integer> sortedPriorityList, Job sourceJob) {
+      Allocation sourceAllocation = new Allocation();
+      
+      sourceAllocation.setPredecessorsDoneDate(0);
+      sourceAllocation.setId((long) (project.getId() * 100));
+      sourceAllocation.setSuccessorAllocationList(
+  	    priorityToAllocationListMap.get(sortedPriorityList.get(0)));
+      sourceAllocation.setJob(sourceJob);
+      
+      return sourceAllocation;
+  }
+
+  private Allocation getSinkAllocation(Project project, Map<Integer, ArrayList<Allocation>> priorityToAllocationListMap, List<Integer> sortedPriorityList, Job sinkJob, ManufOrder manufOrder) {
+      Allocation sinkAllocation = new Allocation();
+      
+      sinkAllocation.setPredecessorsDoneDate(0);
+      sinkAllocation.setId((long) (project.getId() * 100 + manufOrder.getOperationOrderList().size() + 1));
+      sinkAllocation.setPredecessorAllocationList(
+  	    priorityToAllocationListMap.get(sortedPriorityList.get(sortedPriorityList.size() - 1)));
+      sinkAllocation.setSuccessorAllocationList(new ArrayList<Allocation>());
+      sinkAllocation.setJob(sinkJob);
+      
+      return sinkAllocation;
+  }
+
+  private Job getJob(Schedule unsolvedJobScheduling, Project project, Integer priorityIdx, List<Integer> sortedPriorityList, Map<Integer, ArrayList<Job>> priorityToJobListMap, List<Job> sinkJobList) {
+      Job job = new Job();
+      
+      long jobId =
+          unsolvedJobScheduling.getJobList().size() > 0
+              ? unsolvedJobScheduling
+                      .getJobList()
+                      .get(unsolvedJobScheduling.getJobList().size() - 1)
+                      .getId()
+                  + 1
+              : 0;
+      job.setId(jobId);
+      job.setExecutionModeList(new ArrayList<ExecutionMode>());
+      job.setJobType(JobType.STANDARD);
+      job.setProject(project);
+      if (priorityIdx < sortedPriorityList.size() - 1) {
+        job.setSuccessorJobList(priorityToJobListMap.get(sortedPriorityList.get(priorityIdx + 1)));
+      } else {
+        job.setSuccessorJobList(sinkJobList);
+      }
+      
+      return job;
+  }
+
+  private ExecutionMode getExecutionMode(Schedule unsolvedJobScheduling, Job job, OperationOrder operationOrder, ManufOrder manufOrder, Integer granularity) {
+      ExecutionMode executionMode = new ExecutionMode();
+      
+      long executionModeId =
+          unsolvedJobScheduling.getExecutionModeList().size() > 0
+              ? unsolvedJobScheduling
+                      .getExecutionModeList()
+                      .get(unsolvedJobScheduling.getExecutionModeList().size() - 1)
+                      .getId()
+                  + 1
+              : 0;
+      executionMode.setId(executionModeId);
+      executionMode.setJob(job);
+      executionMode.setResourceRequirementList(new ArrayList<ResourceRequirement>());
+      long duration = 0;
+      if (operationOrder.getWorkCenter().getWorkCenterTypeSelect() != 1) {
+        duration =
+            (long)
+                (operationOrder.getWorkCenter().getDurationPerCycle()
+                    * Math.ceil(
+                        (float) manufOrder.getQty().intValue()
+                            / operationOrder
+                                .getWorkCenter()
+                                .getMaxCapacityPerCycle()
+                                .intValue()));
+      } else if (operationOrder.getWorkCenter().getWorkCenterTypeSelect() == 1) {
+        duration =
+            operationOrder.getWorkCenter().getProdHumanResourceList().get(0).getDuration()
+                * manufOrder.getQty().intValue();
+      }
+      executionMode.setDuration((int) Math.ceil(((double) duration) / granularity));
+      
+      return executionMode;
+  }
+
+  private ResourceRequirement getResourceRequirement(Schedule unsolvedJobScheduling, ExecutionMode executionMode, OperationOrder operationOrder, Map<String, Resource> machineCodeToResourceMap) {
+      ResourceRequirement resourceRequirement = new ResourceRequirement();
+      
+      long resourceRequirementId =
+          unsolvedJobScheduling.getResourceRequirementList().size() > 0
+              ? unsolvedJobScheduling
+                      .getResourceRequirementList()
+                      .get(unsolvedJobScheduling.getResourceRequirementList().size() - 1)
+                      .getId()
+                  + 1
+              : 0;
+      resourceRequirement.setId(resourceRequirementId);
+      resourceRequirement.setExecutionMode(executionMode);
+      Resource resource = machineCodeToResourceMap.get(operationOrder.getWorkCenter().getCode());
+      resourceRequirement.setResource(resource);
+      resourceRequirement.setRequirement(1);
+      
+      return resourceRequirement;
+  }
+
+  private Allocation getAllocation(Project project, Integer allocationIdx, Job job, Integer priorityIdx, Map<Integer, ArrayList<Allocation>> priorityToAllocationListMap, Allocation sourceAllocation, Allocation sinkAllocation, List<Integer> sortedPriorityList, List<Allocation> sourceAllocationList, List<Allocation> sinkAllocationList, Map<Long, OperationOrder> allocationIdToOperationOrderMap, OperationOrder operationOrder) {
+      Allocation allocation = new Allocation();
+      
+      Long allocationId = (long) (project.getId() * 100 + (allocationIdx + 1));
+      allocation.setId(allocationId);
+      allocation.setJob(job);
+      List<Allocation> predecessorAllocationList =
+          priorityIdx > 0
+              ? priorityToAllocationListMap.get(sortedPriorityList.get(priorityIdx - 1))
+              : sourceAllocationList;
+      allocation.setPredecessorAllocationList(predecessorAllocationList);
+      List<Allocation> successorAllocationList =
+          priorityIdx < sortedPriorityList.size() - 1
+              ? priorityToAllocationListMap.get(sortedPriorityList.get(priorityIdx + 1))
+              : sinkAllocationList;
+      allocation.setSuccessorAllocationList(successorAllocationList);
+      allocationIdToOperationOrderMap.put(allocationId, operationOrder);
+      allocation.setPredecessorsDoneDate(0);
+      allocation.setSourceAllocation(sourceAllocation);
+      allocation.setSinkAllocation(sinkAllocation);
+      allocation.setPredecessorsDoneDate(0);
+      
+      return allocation;
+  }
+
+  private Project createProject(
+      Schedule unsolvedJobScheduling,
+      ManufOrder manufOrder,
+      Map<String, Resource> machineCodeToResourceMap,
+      Map<Long, OperationOrder> allocationIdToOperationOrderMap,
+      LocalDateTime now,
+      Integer granularity) {
+
+    Map<Integer, List<OperationOrder>> priorityToOperationOrderListMap = getPriorityToOperationOrderListMap(manufOrder);
+    
+    List<Integer> sortedPriorityList =
+        new ArrayList<Integer>(new TreeSet<Integer>(priorityToOperationOrderListMap.keySet()));
+    
+    Map<Integer, ArrayList<Job>> priorityToJobListMap = initializePriorityToJobListMap(sortedPriorityList);
+    Map<Integer, ArrayList<Allocation>> priorityToAllocationListMap = initializePriorityToAllocationListMap(sortedPriorityList);
+
+    Project project = initializeProject(unsolvedJobScheduling);
+
+    Job sourceJob = getSourceJob(unsolvedJobScheduling, project, priorityToJobListMap, sortedPriorityList);
     project.getJobList().add(sourceJob);
     unsolvedJobScheduling.getJobList().add(sourceJob);
 
-    Allocation sourceAllocation = new Allocation();
-    sourceAllocation.setPredecessorsDoneDate(0);
-    sourceAllocation.setId((long) (projectId * 100));
-    sourceAllocation.setSuccessorAllocationList(
-        priorityToAllocationMap.get(sortedPriorityList.get(0)));
-    sourceAllocation.setJob(sourceJob);
+    Allocation sourceAllocation = getSourceAllocation(project, priorityToAllocationListMap, sortedPriorityList, sourceJob);
     unsolvedJobScheduling.getAllocationList().add(sourceAllocation);
-    List<Allocation> sourceAllocationList = new ArrayList<>();
-    sourceAllocationList.add(sourceAllocation);
+    List<Allocation> sourceAllocationList = Lists.newArrayList(sourceAllocation);
 
-    Job sinkJob = new Job();
-    long sinkJobId =
-        unsolvedJobScheduling.getJobList().size() > 0
-            ? unsolvedJobScheduling
-                    .getJobList()
-                    .get(unsolvedJobScheduling.getJobList().size() - 1)
-                    .getId()
-                + 1
-            : 0;
-    sinkJob.setId(sinkJobId);
-    sinkJob.setProject(project);
-    sinkJob.setJobType(JobType.SINK);
+    Job sinkJob = getSinkJob(unsolvedJobScheduling, project);
     project.getJobList().add(sinkJob);
     unsolvedJobScheduling.getJobList().add(sinkJob);
-    List<Job> sinkJobList = new ArrayList<>();
-    sinkJobList.add(sinkJob);
+    List<Job> sinkJobList = Lists.newArrayList(sinkJob);
 
-    Allocation sinkAllocation = new Allocation();
-    sinkAllocation.setPredecessorsDoneDate(0);
-    sinkAllocation.setId((long) (projectId * 100 + prodProcessLineList.size() + 1));
-    sinkAllocation.setPredecessorAllocationList(
-        priorityToAllocationMap.get(sortedPriorityList.get(sortedPriorityList.size() - 1)));
-    sinkAllocation.setSuccessorAllocationList(new ArrayList<Allocation>());
-    sinkAllocation.setJob(sinkJob);
-    List<Allocation> sinkAllocationList = new ArrayList<>();
-    sinkAllocationList.add(sinkAllocation);
+    Allocation sinkAllocation = getSinkAllocation(project, priorityToAllocationListMap, sortedPriorityList, sourceJob, manufOrder);
+    List<Allocation> sinkAllocationList = Lists.newArrayList(sinkAllocation);
 
-    int allocationIdx = 0;
-    for (int priorityIdx = 0; priorityIdx < sortedPriorityList.size(); priorityIdx++) {
+    Integer allocationIdx = 0;
+    for (Integer priorityIdx = 0; priorityIdx < sortedPriorityList.size(); priorityIdx++) {
       int priority = sortedPriorityList.get(priorityIdx);
-      for (OperationOrder operationOrder : priorityToOperationOrderMap.get(priority)) {
+      for (OperationOrder operationOrder : priorityToOperationOrderListMap.get(priority)) {
         // Job
-        Job job = new Job();
-        long jobId =
-            unsolvedJobScheduling.getJobList().size() > 0
-                ? unsolvedJobScheduling
-                        .getJobList()
-                        .get(unsolvedJobScheduling.getJobList().size() - 1)
-                        .getId()
-                    + 1
-                : 0;
-        job.setId(jobId);
-        job.setExecutionModeList(new ArrayList<ExecutionMode>());
-        job.setJobType(JobType.STANDARD);
-        job.setProject(project);
-        if (priorityIdx < sortedPriorityList.size() - 1) {
-          job.setSuccessorJobList(priorityToJobMap.get(sortedPriorityList.get(priorityIdx + 1)));
-        } else {
-          job.setSuccessorJobList(sinkJobList);
-        }
-
-        unsolvedJobScheduling.getJobList().add(job);
-
-        priorityToJobMap.get(priority).add(job);
-
+        Job job = getJob(unsolvedJobScheduling, project, priorityIdx, sortedPriorityList, priorityToJobListMap, sinkJobList);
         project.getJobList().add(job);
+        unsolvedJobScheduling.getJobList().add(job);
+        priorityToJobListMap.get(priority).add(job);
 
         // Execution Mode
-        ExecutionMode executionMode = new ExecutionMode();
-        long executionModeId =
-            unsolvedJobScheduling.getExecutionModeList().size() > 0
-                ? unsolvedJobScheduling
-                        .getExecutionModeList()
-                        .get(unsolvedJobScheduling.getExecutionModeList().size() - 1)
-                        .getId()
-                    + 1
-                : 0;
-        executionMode.setId(executionModeId);
-        executionMode.setJob(job);
-        executionMode.setResourceRequirementList(new ArrayList<ResourceRequirement>());
-        long duration = 0;
-        if (operationOrder.getWorkCenter().getWorkCenterTypeSelect() != 1) {
-          duration =
-              (long)
-                  (operationOrder.getWorkCenter().getDurationPerCycle()
-                      * Math.ceil(
-                          (float) manufOrder.getQty().intValue()
-                              / operationOrder
-                                  .getWorkCenter()
-                                  .getMaxCapacityPerCycle()
-                                  .intValue()));
-        } else if (operationOrder.getWorkCenter().getWorkCenterTypeSelect() == 1) {
-          duration =
-              operationOrder.getWorkCenter().getProdHumanResourceList().get(0).getDuration()
-                  * manufOrder.getQty().intValue();
-        }
-        executionMode.setDuration((int) Math.ceil(((double) duration) / granularity));
-
+        ExecutionMode executionMode = getExecutionMode(unsolvedJobScheduling, job, operationOrder, manufOrder, granularity);
         unsolvedJobScheduling.getExecutionModeList().add(executionMode);
-
         job.getExecutionModeList().add(executionMode);
 
         // Resource Requirement
-        ResourceRequirement resourceRequirement = new ResourceRequirement();
-        long resourceRequirementId =
-            unsolvedJobScheduling.getResourceRequirementList().size() > 0
-                ? unsolvedJobScheduling
-                        .getResourceRequirementList()
-                        .get(unsolvedJobScheduling.getResourceRequirementList().size() - 1)
-                        .getId()
-                    + 1
-                : 0;
-        resourceRequirement.setId(resourceRequirementId);
-        resourceRequirement.setExecutionMode(executionMode);
-        Resource resource = machineCodeToResourceMap.get(operationOrder.getWorkCenter().getCode());
-        resourceRequirement.setResource(resource);
-        resourceRequirement.setRequirement(1);
+        ResourceRequirement resourceRequirement = getResourceRequirement(unsolvedJobScheduling, executionMode, operationOrder, machineCodeToResourceMap);
+        unsolvedJobScheduling.getResourceRequirementList().add(resourceRequirement);
         executionMode.getResourceRequirementList().add(resourceRequirement);
 
-        unsolvedJobScheduling.getResourceRequirementList().add(resourceRequirement);
-
         // Allocation
-        Allocation allocation = new Allocation();
-        Long allocationId = (long) (projectId * 100 + (allocationIdx + 1));
-        allocation.setId(allocationId);
+        Allocation allocation = getAllocation(project, allocationIdx, job, priorityIdx, priorityToAllocationListMap, sourceAllocation, sinkAllocation, sortedPriorityList, sourceAllocationList, sinkAllocationList, allocationIdToOperationOrderMap, operationOrder);
         allocationIdx++;
-        allocation.setJob(job);
-        List<Allocation> predecessorAllocationList =
-            priorityIdx > 0
-                ? priorityToAllocationMap.get(sortedPriorityList.get(priorityIdx - 1))
-                : sourceAllocationList;
-        allocation.setPredecessorAllocationList(predecessorAllocationList);
-        List<Allocation> successorAllocationList =
-            priorityIdx < sortedPriorityList.size() - 1
-                ? priorityToAllocationMap.get(sortedPriorityList.get(priorityIdx + 1))
-                : sinkAllocationList;
-        allocation.setSuccessorAllocationList(successorAllocationList);
-        allocationIdToOperationOrderMap.put(allocationId, operationOrder);
-        allocation.setPredecessorsDoneDate(0);
-        allocation.setSourceAllocation(sourceAllocation);
-        allocation.setSinkAllocation(sinkAllocation);
-        allocation.setPredecessorsDoneDate(0);
-
         unsolvedJobScheduling.getAllocationList().add(allocation);
-
-        priorityToAllocationMap.get(priority).add(allocation);
+        priorityToAllocationListMap.get(priority).add(allocation);
 
         // Pinned job
         boolean isOperationOrderStarted =
@@ -427,7 +514,7 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
             && operationOrder.getPlannedStartDateT() != null) {
           job.setPinned(true);
           job.setPinnedDate(
-              (int) ChronoUnit.MINUTES.between(now, operationOrder.getPlannedStartDateT()));
+              (int) ChronoUnit.SECONDS.between(now, operationOrder.getPlannedStartDateT()) / granularity);
           job.setPinnedExecutionMode(executionMode);
         }
       }
