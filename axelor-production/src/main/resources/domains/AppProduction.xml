@@ -5,6 +5,8 @@
 	<module name="base" package="com.axelor.apps.base.db"/>
 
 	<entity name="AppProduction" lang="java" cachable="true" extends="App">
+    	<integer name="optaplannerGranularity" title="Optaplanner granularity" selection="production.manuf.order.optaplanner.granularity.select"/>
+
 		<boolean name="prodOrderMgtOnSO" title="Production order management from sale order" default="false"/>
 		<boolean name="productionOrderGenerationAuto" title="Generate production orders automatically" default="false"/>
     	

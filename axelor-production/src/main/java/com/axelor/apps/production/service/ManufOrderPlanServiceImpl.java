@@ -1,5 +1,10 @@
 package com.axelor.apps.production.service;
 
+import com.axelor.apps.base.db.Unit;
+import com.axelor.apps.base.db.repo.AppProductionRepository;
+import com.axelor.apps.base.db.repo.UnitConversionRepository;
+import com.axelor.apps.base.db.repo.UnitRepository;
+import com.axelor.apps.base.service.UnitConversionService;
 import com.axelor.apps.production.db.ManufOrder;
 import com.axelor.apps.production.db.OperationOrder;
 import com.axelor.apps.production.db.ProdProcessLine;
@@ -12,7 +17,9 @@ import com.axelor.apps.tool.date.DurationTool;
 import com.axelor.exception.AxelorException;
 import com.axelor.inject.Beans;
 import com.google.common.collect.Lists;
+import com.google.inject.Inject;
 import com.google.inject.persist.Transactional;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -36,6 +43,13 @@ import org.optaplanner.examples.projectjobscheduling.domain.resource.Resource;
 
 public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
 
+  protected UnitConversionService unitConversionService;
+
+  @Inject
+  public ManufOrderPlanServiceImpl(UnitConversionService unitConversionService) {
+    this.unitConversionService = unitConversionService;
+  }
+
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public void optaPlan(ManufOrder manufOrder) throws AxelorException {
     optaPlan(Lists.newArrayList(manufOrder));
@@ -43,6 +57,26 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
 
   @Transactional(rollbackOn = {AxelorException.class, Exception.class})
   public void optaPlan(List<ManufOrder> manufOrderList) throws AxelorException {
+    // Get optaplanner granularity
+    Integer granularity;
+    switch(Beans.get(AppProductionRepository.class).all().fetchOne().getOptaplannerGranularity()) {
+      case(1):
+        granularity = 60;
+        break;
+      case(2):
+        granularity = 1800;
+        break;
+      case(3):
+        granularity = 3600;
+        break;
+      case(4):
+        granularity = 86400;
+        break;
+      default:
+        granularity = 60;
+        break;
+    }
+
     // Build the Solver
     SolverFactory<Schedule> solverFactory =
         SolverFactory.createFromXmlResource(
@@ -92,7 +126,8 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
               manufOrder,
               machineCodeToResourceMap,
               allocationIdToOperationOrderMap,
-              now);
+              now,
+              granularity);
       projectIdToManufOrderMap.put(project.getId(), manufOrder);
     }
 
@@ -113,14 +148,14 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
       if (operationOrder != null) {
         ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
 
-        LocalDateTime operationOrderPlannedStartDate = now.plusMinutes(allocation.getStartDate());
+        LocalDateTime operationOrderPlannedStartDate = now.plusSeconds(allocation.getStartDate() * granularity);
         operationOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
         if (manufOrder.getPlannedStartDateT() == null
             || manufOrder.getPlannedStartDateT().isAfter(operationOrderPlannedStartDate)) {
           manufOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
         }
 
-        LocalDateTime operationOrderPlannedEndDate = now.plusMinutes(allocation.getEndDate());
+        LocalDateTime operationOrderPlannedEndDate = now.plusSeconds(allocation.getEndDate() * granularity);
         operationOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
         if (manufOrder.getPlannedEndDateT() == null
             || manufOrder.getPlannedEndDateT().isBefore(operationOrderPlannedEndDate)) {
@@ -184,7 +219,8 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
       ManufOrder manufOrder,
       Map<String, Resource> machineCodeToResourceMap,
       Map<Long, OperationOrder> allocationIdToOperationOrderMap,
-      LocalDateTime now) {
+      LocalDateTime now,
+      Integer granularity) {
 
     List<ProdProcessLine> prodProcessLineList =
         manufOrder.getProdProcess().getProdProcessLineList();
@@ -333,7 +369,7 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
               operationOrder.getWorkCenter().getProdHumanResourceList().get(0).getDuration()
                   * manufOrder.getQty().intValue();
         }
-        executionMode.setDuration((int) duration / 60);
+        executionMode.setDuration((int) Math.ceil(((double) duration) / granularity));
 
         unsolvedJobScheduling.getExecutionModeList().add(executionMode);
 
@@ -386,10 +422,11 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
 
         // Pinned job
         boolean isOperationOrderStarted =
-            operationOrder.getStatusSelect() == OperationOrderRepository.STATUS_IN_PROGRESS ||
-            operationOrder.getStatusSelect() == OperationOrderRepository.STATUS_STANDBY ||
-            operationOrder.getStatusSelect() == OperationOrderRepository.STATUS_FINISHED;
-        if ((operationOrder.getIsPinned() || isOperationOrderStarted) && operationOrder.getPlannedStartDateT() != null) {
+            operationOrder.getStatusSelect() == OperationOrderRepository.STATUS_IN_PROGRESS
+                || operationOrder.getStatusSelect() == OperationOrderRepository.STATUS_STANDBY
+                || operationOrder.getStatusSelect() == OperationOrderRepository.STATUS_FINISHED;
+        if ((operationOrder.getIsPinned() || isOperationOrderStarted)
+            && operationOrder.getPlannedStartDateT() != null) {
           job.setPinned(true);
           job.setPinnedDate(
               (int) ChronoUnit.MINUTES.between(now, operationOrder.getPlannedStartDateT()));
