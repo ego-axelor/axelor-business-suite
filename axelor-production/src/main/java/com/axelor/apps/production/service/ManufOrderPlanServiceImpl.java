@@ -1,9 +1,6 @@
 package com.axelor.apps.production.service;
 
-import com.axelor.apps.base.db.Unit;
 import com.axelor.apps.base.db.repo.AppProductionRepository;
-import com.axelor.apps.base.db.repo.UnitConversionRepository;
-import com.axelor.apps.base.db.repo.UnitRepository;
 import com.axelor.apps.base.service.UnitConversionService;
 import com.axelor.apps.production.db.ManufOrder;
 import com.axelor.apps.production.db.OperationOrder;
@@ -19,7 +16,6 @@ import com.axelor.inject.Beans;
 import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.persist.Transactional;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -59,17 +55,17 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
   public void optaPlan(List<ManufOrder> manufOrderList) throws AxelorException {
     // Get optaplanner granularity
     Integer granularity;
-    switch(Beans.get(AppProductionRepository.class).all().fetchOne().getOptaplannerGranularity()) {
-      case(1):
+    switch (Beans.get(AppProductionRepository.class).all().fetchOne().getSchedulingGranularity()) {
+      case (1):
         granularity = 60;
         break;
-      case(2):
+      case (2):
         granularity = 1800;
         break;
-      case(3):
+      case (3):
         granularity = 3600;
         break;
-      case(4):
+      case (4):
         granularity = 86400;
         break;
       default:
@@ -148,14 +144,16 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
       if (operationOrder != null) {
         ManufOrder manufOrder = projectIdToManufOrderMap.get(allocation.getProject().getId());
 
-        LocalDateTime operationOrderPlannedStartDate = now.plusSeconds(allocation.getStartDate() * granularity);
+        LocalDateTime operationOrderPlannedStartDate =
+            now.plusSeconds(allocation.getStartDate() * granularity);
         operationOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
         if (manufOrder.getPlannedStartDateT() == null
             || manufOrder.getPlannedStartDateT().isAfter(operationOrderPlannedStartDate)) {
           manufOrder.setPlannedStartDateT(operationOrderPlannedStartDate);
         }
 
-        LocalDateTime operationOrderPlannedEndDate = now.plusSeconds(allocation.getEndDate() * granularity);
+        LocalDateTime operationOrderPlannedEndDate =
+            now.plusSeconds(allocation.getEndDate() * granularity);
         operationOrder.setPlannedEndDateT(operationOrderPlannedEndDate);
         if (manufOrder.getPlannedEndDateT() == null
             || manufOrder.getPlannedEndDateT().isBefore(operationOrderPlannedEndDate)) {

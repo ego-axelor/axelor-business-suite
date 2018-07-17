@@ -18,6 +18,7 @@
 package com.axelor.apps.production.service;
 
 import com.axelor.apps.base.db.Product;
+import com.axelor.apps.base.db.repo.AppProductionRepository;
 import com.axelor.apps.base.db.repo.ProductRepository;
 import com.axelor.apps.base.service.ProductService;
 import com.axelor.apps.base.service.administration.SequenceService;
@@ -95,15 +96,18 @@ public class ManufOrderWorkflowService {
       }
     }
 
-    Beans.get(ManufOrderPlanService.class).optaPlan(manufOrderList);
-
-    /*
-    if (manufOrder.getOperationOrderList() != null) {
-      for (OperationOrder operationOrder : getSortedOperationOrderList(manufOrder)) {
-        operationOrderWorkflowService.plan(operationOrder);
+    if(Beans.get(AppProductionRepository.class).all().fetchOne().getFiniteCapacity()) {
+      Beans.get(ManufOrderPlanService.class).optaPlan(manufOrderList);
+    }
+    else {
+      for (ManufOrder manufOrder : manufOrderList) {
+        if (manufOrder.getOperationOrderList() != null) {
+          for (OperationOrder operationOrder : getSortedOperationOrderList(manufOrder)) {
+            operationOrderWorkflowService.plan(operationOrder);
+          }
+        }
       }
     }
-    */
 
     for (ManufOrder manufOrder : manufOrderList) {
       manufOrder.setPlannedEndDateT(this.computePlannedEndDateT(manufOrder));
