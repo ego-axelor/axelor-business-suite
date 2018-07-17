@@ -88,10 +88,12 @@
 				]]>
 				</viewer>
 			</field>
+			<field name="manufOrder.statusSelect" hidden="true"/>
 			<field name="statusSelect" showTitle="false" readonly="true" widget="NavSelect" colSpan="12"/>
 			<field name="manufOrder.statusSelect" hidden="true"/>
 		</panel>
 		<panel name="dates" title="Dates" colSpan="12" readonlyIf="statusSelect == 6">
+			<field name="isPinned" />
 			<panel name="plannedDates" title="Planned dates" colSpan="6">
 				<field name="plannedStartDateT" onChange="save,action-operation-order-method-compute-duration,save"/>
 				<field name="plannedEndDateT" onChange="save,action-operation-order-method-compute-duration,save"/>

@@ -26,7 +26,7 @@ public class Job extends AbstractPersistable {
   private Project project;
   private JobType jobType;
   private List<ExecutionMode> executionModeList;
-  
+
   private boolean pinned;
   private Integer pinnedDate;
   private ExecutionMode pinnedExecutionMode;
@@ -58,7 +58,7 @@ public class Job extends AbstractPersistable {
   }
 
   public boolean isPinned() {
-	  return pinned;
+    return pinned;
   }
 
   public void setPinned(boolean pinned) {

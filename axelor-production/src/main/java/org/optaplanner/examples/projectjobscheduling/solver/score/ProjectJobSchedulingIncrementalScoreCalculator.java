@@ -117,8 +117,8 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
       }
     }
     // Pinned Jobs
-    if(allocation.getJob().isPinned()) {
-      Integer diff = - Math.abs(allocation.getJob().getPinnedDate() - allocation.getStartDate());
+    if (allocation.getJob().isPinned()) {
+      Integer diff = -Math.abs(allocation.getJob().getPinnedDate() - allocation.getStartDate());
       hard1Score += diff;
     }
     // Total project delay and total make span
@@ -152,7 +152,7 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
       }
     }
     // Pinned Jobs
-    if(allocation.getJob().isPinned()) {
+    if (allocation.getJob().isPinned()) {
       Integer diff = Math.abs(allocation.getJob().getPinnedDate() - allocation.getStartDate());
       hard1Score += diff;
     }
@@ -185,6 +185,7 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
 
   @Override
   public Score calculateScore() {
-    return BendableScore.valueOf(new int[] {hard0Score, hard1Score}, new int[] {soft0Score, soft1Score});
+    return BendableScore.valueOf(
+        new int[] {hard0Score, hard1Score}, new int[] {soft0Score, soft1Score});
   }
 }
