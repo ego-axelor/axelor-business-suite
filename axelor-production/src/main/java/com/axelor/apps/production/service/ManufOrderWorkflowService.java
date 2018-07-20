@@ -96,10 +96,9 @@ public class ManufOrderWorkflowService {
       }
     }
 
-    if(Beans.get(AppProductionRepository.class).all().fetchOne().getFiniteCapacity()) {
+    if (Beans.get(AppProductionRepository.class).all().fetchOne().getFiniteCapacity()) {
       Beans.get(ManufOrderPlanService.class).optaPlan(manufOrderList);
-    }
-    else {
+    } else {
       for (ManufOrder manufOrder : manufOrderList) {
         if (manufOrder.getOperationOrderList() != null) {
           for (OperationOrder operationOrder : getSortedOperationOrderList(manufOrder)) {
