@@ -97,4 +97,11 @@
 		<option value="productionOrder">Production order</option>
 		<option value="manufOrder">Manufacturing order</option>
 	</selection>
+	
+	<selection name="production.manuf.order.optaplanner.granularity.select">
+		<option value="1">Minutes</option>
+		<option value="2">Half-hours</option>
+		<option value="3">Hours</option>
+		<option value="4">Days</option>
+	</selection>
 </object-views>

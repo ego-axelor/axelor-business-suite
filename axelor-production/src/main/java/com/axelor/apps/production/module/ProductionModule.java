@@ -39,6 +39,8 @@ import com.axelor.apps.production.service.CostSheetLineService;
 import com.axelor.apps.production.service.CostSheetLineServiceImpl;
 import com.axelor.apps.production.service.CostSheetService;
 import com.axelor.apps.production.service.CostSheetServiceImpl;
+import com.axelor.apps.production.service.ManufOrderPlanService;
+import com.axelor.apps.production.service.ManufOrderPlanServiceImpl;
 import com.axelor.apps.production.service.ManufOrderService;
 import com.axelor.apps.production.service.ManufOrderServiceImpl;
 import com.axelor.apps.production.service.MrpLineServiceProductionImpl;
@@ -74,6 +76,7 @@ public class ProductionModule extends AxelorModule {
     bind(ProductionOrderService.class).to(ProductionOrderServiceImpl.class);
     bind(BillOfMaterialService.class).to(BillOfMaterialServiceImpl.class);
     bind(ManufOrderService.class).to(ManufOrderServiceImpl.class);
+    bind(ManufOrderPlanService.class).to(ManufOrderPlanServiceImpl.class);
     bind(OperationOrderService.class).to(OperationOrderServiceImpl.class);
     bind(ProductionOrderService.class).to(ProductionOrderServiceImpl.class);
     bind(ProductionOrderWizardService.class).to(ProductionOrderWizardServiceImpl.class);
