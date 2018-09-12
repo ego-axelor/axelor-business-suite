@@ -137,24 +137,38 @@ public class ManufOrderController {
     }
   }
 
-  public void plan(ActionRequest request, ActionResponse response) {
+  public void quickPlan(ActionRequest request, ActionResponse response) {
+    plan(request, response, true);
+  }
+
+  public void slowPlan(ActionRequest request, ActionResponse response) {
+    plan(request, response, false);
+  }
+
+  private void plan(ActionRequest request, ActionResponse response, boolean quickSolve) {
 
     try {
       List<Integer> manufOrderIdList = (List<Integer>) request.getContext().get("_ids");
+      System.out.println("COUCOU : "+manufOrderIdList);
       if (manufOrderIdList == null) {
         Long manufOrderId = (Long) request.getContext().get("id");
-        manufOrderIdList = Lists.newArrayList(manufOrderId.intValue());
+        if(manufOrderId != null) {
+          manufOrderIdList = Lists.newArrayList(manufOrderId.intValue());
+        }
       }
-      List<ManufOrder> manufOrderList =
-          manufOrderRepo
-              .all()
-              .filter("self.id in (:idList)")
-              .bind("idList", manufOrderIdList)
-              .fetch();
+      
+      if(manufOrderIdList != null) {
+        List<ManufOrder> manufOrderList =
+            manufOrderRepo
+                .all()
+                .filter("self.id in (:idList)")
+                .bind("idList", manufOrderIdList)
+                .fetch();
 
-      manufOrderWorkflowService.plan(manufOrderList);
+        manufOrderWorkflowService.plan(manufOrderList, quickSolve);
 
-      response.setReload(true);
+        response.setReload(true);
+      }
     } catch (Exception e) {
       TraceBackService.trace(response, e);
     }

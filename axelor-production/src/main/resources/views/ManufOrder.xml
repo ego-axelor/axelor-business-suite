@@ -6,7 +6,8 @@
     <grid name="manuf-order-grid" title="Manufacturing orders" model="com.axelor.apps.production.db.ManufOrder" orderBy="-manufOrderSeq">
     	<toolbar>
     		<button name="print" title="Print" icon="fa-print" onClick="action-manuf-order-method-print"/>
-    		<button name="plan" title="Plan" onClick="action-manuf-order-method-plan"/>
+    		<button name="quickPlan" title="Quick Plan" onClick="action-manuf-order-method-quick-plan"/>
+    		<button name="slowPlan" title="Slow Plan" onClick="action-manuf-order-method-slow-plan"/>
     	</toolbar>
     	<hilite color="danger" if="prioritySelect == 4"/>
   		<hilite color="warning" if="prioritySelect == 3"/>
@@ -24,7 +25,7 @@
         <field name="realStartDateT"/>
         <field name="realEndDateT"/>
         <field name="statusSelect"/>
-        <button name="plan" icon="fa-calendar" onClick="action-manuf-order-method-plan" readonlyIf="statusSelect >= 3"/>
+        <button name="plan" icon="fa-calendar" onClick="action-manuf-order-method-quick-plan" readonlyIf="statusSelect >= 3"/>
         <button name="start" icon="fa-play" onClick="action-manuf-order-method-start-or-resume" readonlyIf="statusSelect != 3 &amp;&amp; statusSelect != 5"/>
    		<button name="pause" icon="fa-pause" onClick="action-manuf-order-method-pause" readonlyIf="statusSelect != 4"/>
    		<button name="finish" icon="fa-power-off" onClick="action-manuf-order-group-finish" readonlyIf="statusSelect != 4"/>
@@ -48,7 +49,7 @@
         <field name="realStartDateT"/>
         <field name="realEndDateT"/>
         <field name="statusSelect"/>
-        <button name="plan" icon="fa-calendar" onClick="action-manuf-order-method-plan" readonlyIf="statusSelect >= 3"/>
+        <button name="plan" icon="fa-calendar" onClick="action-manuf-order-method-quick-plan" readonlyIf="statusSelect >= 3"/>
         <button name="start" icon="fa-play" onClick="action-manuf-order-method-start-or-resume" readonlyIf="statusSelect != 3 &amp;&amp; statusSelect != 5"/>
    		<button name="pause" icon="fa-pause" onClick="action-manuf-order-method-pause" readonlyIf="statusSelect != 4"/>
    		<button name="finish" icon="fa-power-off" onClick="action-manuf-order-group-finish" readonlyIf="statusSelect != 4"/>
@@ -112,7 +113,7 @@
 			<field name="product.isModel" hidden="true"/>
 		</panel>
 		<panel name="actions" title="Actions" colSpan="4">
-			<button name="plan" icon="fa-calendar" title="Plan" colSpan="12" showIf="statusSelect == 1 || statusSelect == 2" onClick="save,action-manuf-order-set-draft-seq,action-manuf-order-method-plan" />
+			<button name="plan" icon="fa-calendar" title="Plan" colSpan="12" showIf="statusSelect == 1 || statusSelect == 2" onClick="save,action-manuf-order-set-draft-seq,action-manuf-order-method-quick-plan" />
 			<button name="start" icon="fa-play" title="Start" colSpan="12" showIf="statusSelect == 3" onClick="save,action-manuf-order-method-start"/>
 			<button name="pause" icon="fa-pause" title="Pause" colSpan="12" showIf="statusSelect == 4" onClick="save,action-manuf-order-method-pause"/>
 			<button name="resume" icon="fa-step-forward" title="Resume" colSpan="12" showIf="statusSelect == 5" onClick="save,action-manuf-order-method-resume"/>
@@ -305,8 +306,12 @@
     	<call class="com.axelor.apps.production.web.ManufOrderController" method="cancel"/>
     </action-method>
     
-    <action-method name="action-manuf-order-method-plan">
-    	<call class="com.axelor.apps.production.web.ManufOrderController" method="plan"/>
+    <action-method name="action-manuf-order-method-quick-plan">
+    	<call class="com.axelor.apps.production.web.ManufOrderController" method="quickPlan"/>
+    </action-method>
+    
+    <action-method name="action-manuf-order-method-slow-plan">
+    	<call class="com.axelor.apps.production.web.ManufOrderController" method="slowPlan"/>
     </action-method>
 
 	<action-method name="action-manuf-order-method-part-finish">
