@@ -149,15 +149,15 @@ public class ManufOrderController {
 
     try {
       List<Integer> manufOrderIdList = (List<Integer>) request.getContext().get("_ids");
-      System.out.println("COUCOU : "+manufOrderIdList);
+      System.out.println("COUCOU : " + manufOrderIdList);
       if (manufOrderIdList == null) {
         Long manufOrderId = (Long) request.getContext().get("id");
-        if(manufOrderId != null) {
+        if (manufOrderId != null) {
           manufOrderIdList = Lists.newArrayList(manufOrderId.intValue());
         }
       }
-      
-      if(manufOrderIdList != null) {
+
+      if (manufOrderIdList != null) {
         List<ManufOrder> manufOrderList =
             manufOrderRepo
                 .all()

@@ -43,7 +43,10 @@
   
     <datetime name="plannedStartDateT" title="Planned start date" initParam="true"/>
   	<datetime name="plannedEndDateT" title="Planned end date"/>
-  	
+
+    <datetime name="desiredStartDateT" title="Desired start date"/>
+    <datetime name="desiredEndDateT" title="Desired end date"/>
+
  	<datetime name="realStartDateT" title="Real start date"/>
   	<datetime name="realEndDateT" title="Real end date"/>
   	<decimal name="endTimeDifference" title="Time difference (Minutes)"/>
