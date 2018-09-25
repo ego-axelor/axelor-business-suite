@@ -338,8 +338,9 @@ public class ManufOrderPlanServiceImpl implements ManufOrderPlanService {
         this.initializePriorityToAllocationListMap(sortedPriorityList);
 
     Project project;
-    if (projectReleaseDate != null) project = new Project(projectReleaseDate);
-    else project = new Project();
+    Integer manufOrderPriority = manufOrder.getPrioritySelect();
+    if (projectReleaseDate != null) project = new Project(manufOrderPriority, projectReleaseDate);
+    else project = new Project(manufOrderPriority);
     this.unsolvedJobScheduling.addProject(project);
 
     // Source Job

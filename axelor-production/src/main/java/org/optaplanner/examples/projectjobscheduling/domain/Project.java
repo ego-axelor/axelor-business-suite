@@ -26,27 +26,35 @@ public class Project extends AbstractPersistable {
 
   private int releaseDate;
   private int criticalPathDuration;
+  private int priority;
 
   private List<LocalResource> localResourceList;
   private List<Job> jobList;
+  private Job sourceJob;
+  private Job sinkJob;
 
-  public Project() {
-    this(0);
+  public Project(int priority) {
+    this(priority, 0);
   }
 
-  public Project(int releaseDate) {
+  public Project(int priority, int releaseDate) {
+    this.priority = priority;
     this.releaseDate = releaseDate;
 
     this.jobList = new ArrayList<Job>();
     this.localResourceList = new ArrayList<LocalResource>();
   }
 
+  public int getPriority() {
+    return this.priority;
+  }
+
   public int getReleaseDate() {
-    return releaseDate;
+    return this.releaseDate;
   }
 
   public int getCriticalPathDuration() {
-    return criticalPathDuration;
+    return this.criticalPathDuration;
   }
 
   public void setCriticalPathDuration(int criticalPathDuration) {
@@ -54,11 +62,21 @@ public class Project extends AbstractPersistable {
   }
 
   public void addJob(Job job) {
+    if (job.getJobType() == JobType.SOURCE) this.sourceJob = job;
+    if (job.getJobType() == JobType.SINK) this.sinkJob = job;
     this.jobList.add(job);
   }
 
   public List<Job> getJobList() {
-    return jobList;
+    return this.jobList;
+  }
+
+  public Job getSourceJob() {
+    return this.sourceJob;
+  }
+
+  public Job getSinkJob() {
+    return this.sinkJob;
   }
 
   // ************************************************************************
@@ -66,10 +84,10 @@ public class Project extends AbstractPersistable {
   // ************************************************************************
 
   public int getCriticalPathEndDate() {
-    return releaseDate + criticalPathDuration;
+    return this.releaseDate + this.criticalPathDuration;
   }
 
   public String getLabel() {
-    return "Project " + id;
+    return "Project " + this.id;
   }
 }

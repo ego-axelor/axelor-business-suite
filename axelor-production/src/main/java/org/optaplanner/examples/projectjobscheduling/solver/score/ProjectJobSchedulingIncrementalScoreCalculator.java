@@ -19,6 +19,7 @@ package org.optaplanner.examples.projectjobscheduling.solver.score;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import org.optaplanner.core.api.score.Score;
 import org.optaplanner.core.api.score.buildin.bendable.BendableScore;
 import org.optaplanner.core.impl.score.director.incremental.AbstractIncrementalScoreCalculator;
@@ -42,6 +43,7 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
 
   private int hard0Score;
   private int hard1Score;
+  private int hard2Score;
   private int soft0Score;
   private int soft1Score;
 
@@ -61,6 +63,7 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
     maximumProjectEndDate = 0;
     hard0Score = 0;
     hard1Score = 0;
+    hard2Score = 0;
     soft0Score = 0;
     soft1Score = 0;
     int minimumReleaseDate = Integer.MAX_VALUE;
@@ -136,6 +139,28 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
         }
       }
     }
+    // Manuf orders priority
+    System.out.println(allocation + " " + allocation.getJob().getJobType());
+    if (allocation.getJob().getJobType() == JobType.SINK) {
+      for (Entry<Project, Integer> entry : this.projectEndDateMap.entrySet()) {
+        int diff =
+            (entry.getValue() - allocation.getEndDate())
+                * (entry.getKey().getPriority() - allocation.getProject().getPriority());
+        if (diff < 0) {/*
+          System.out.println(
+              "("
+                  + entry.getValue()
+                  + " - "
+                  + allocation.getEndDate()
+                  + ") * ("
+                  + entry.getKey().getPriority()
+                  + " - "
+                  + allocation.getProject().getPriority()
+                  + ")");*/
+          hard2Score += diff;
+        }
+      }
+    }
   }
 
   private void retract(Allocation allocation) {
@@ -171,6 +196,17 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
         }
       }
     }
+    // Manuf orders priority
+    if (allocation.getJob().getJobType() == JobType.SINK) {
+      for (Entry<Project, Integer> entry : this.projectEndDateMap.entrySet()) {
+        int diff =
+            (entry.getValue() - allocation.getEndDate())
+                * (entry.getKey().getPriority() - allocation.getProject().getPriority());
+        if (diff > 0) {
+          hard2Score += diff;
+        }
+      }
+    }
   }
 
   private void updateMaximumProjectEndDate() {
@@ -186,6 +222,6 @@ public class ProjectJobSchedulingIncrementalScoreCalculator
   @Override
   public Score calculateScore() {
     return BendableScore.valueOf(
-        new int[] {hard0Score, hard1Score}, new int[] {soft0Score, soft1Score});
+        new int[] {hard0Score, hard1Score, hard2Score}, new int[] {soft0Score, soft1Score});
   }
 }
